@@ -1,0 +1,32 @@
+Algoforge-ML/
+│
+├── core/                   # 🧠 The ML Engine (Your starting point)
+│   ├── __init__.py
+│   ├── base_model.py       # Abstract Base Class (BaseMLModel)
+│   ├── models/             # Concrete implementations
+│   │   ├── __init__.py
+│   │   ├── tree_models.py  # RandomForestRunner, DecisionTreeRunner
+│   │   ├── linear_models.py# LogisticRegressionRunner, etc.
+│   │   └── distance.py     # KNNRunner, SVMRUNNER
+│   └── data_loader.py      # Logic to load and preprocess datasets
+│
+├── api/                    # ⚙️ The FastAPI Backend
+│   ├── __init__.py
+│   ├── main.py             # The FastAPI app instance
+│   ├── routes.py           # /train, /predict, /datasets endpoints
+│   └── schemas.py          # Pydantic models for strict data validation
+│
+├── frontend/               # 🖥️ The Streamlit UI
+│   ├── app.py              # Main Streamlit entry point
+│   └── components.py       # Reusable UI parts (e.g., sidebar logic)
+│
+├── data/                   # 📊 Local Datasets
+│   ├── raw/                # Unmodified CSVs (Titanic, Housing, etc.)
+│   └── processed/          # Cleaned data ready for training
+│
+├── tests/                  # 🧪 Unit Tests
+│   ├── test_models.py      # Ensure your ML classes work isolated from the API
+│   └── test_api.py         # Ensure endpoints return correct status codes
+│
+├── requirements.txt        # Project dependencies
+└── .gitignore              # Ignore __pycache__, venv, and large data files
