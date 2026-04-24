@@ -1,82 +1,41 @@
-# Linear Models - LogisticRegressionRunner, etc.
-from sklearn.linear_model import LogisticRegression, LinearRegression, Ridge, Lasso
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, classification_report
+from typing import Dict, Any
+
 from core.base_model import BaseMLModel
 
-
 class LogisticRegressionRunner(BaseMLModel):
-    """Logistic Regression model runner for classification."""
+    """
+    Concrete implementation of a Logistic Regression model.
+    """
 
-    def __init__(self, random_state=42, max_iter=1000):
-        self.random_state = random_state
-        self.max_iter = max_iter
-        self.model = None
+    def __init__(self, **kwargs):
+        # Pass any kwargs (hyperparameters) up to the base class
+        super().__init__(**kwargs)
+        # We pass hyperparams like C (inverse regularization strength) or penalty (l1/l2)
+        self.model = LogisticRegression(**self.hyperparameters)
 
-    def fit(self, X, y):
-        self.model = LogisticRegression(
-            random_state=self.random_state,
-            max_iter=self.max_iter
-        )
-        self.model.fit(X, y)
-        return self
+    def train(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
+        """Fits the model to the training data."""
+        self.model.fit(X_train, y_train)
 
-    def predict(self, X):
-        return self.model.predict(X)
+    def predict(self, X_test: pd.DataFrame) -> np.ndarray:
+        """Generates predictions on new data."""
+        return self.model.predict(X_test)
+    
+    def evaluate(self, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, Any]:
+        """Returns a dictionary of performance metrics (Accuracy, MSE, etc.)."""
+        predictions = self.predict(X_test)
 
-    def score(self, X, y):
-        return self.model.score(X, y)
+        #calculate core metrics
+        accuracy = accuracy_score(y_test, predictions)
 
+        # output_dict=True makes this incredibly easy to return as JSON later
+        report = classification_report(y_test, predictions, output_dict=True)
 
-class LinearRegressionRunner(BaseMLModel):
-    """Linear Regression model runner for regression tasks."""
-
-    def __init__(self):
-        self.model = None
-
-    def fit(self, X, y):
-        self.model = LinearRegression()
-        self.model.fit(X, y)
-        return self
-
-    def predict(self, X):
-        return self.model.predict(X)
-
-    def score(self, X, y):
-        return self.model.score(X, y)
-
-
-class RidgeRunner(BaseMLModel):
-    """Ridge Regression model runner."""
-
-    def __init__(self, alpha=1.0):
-        self.alpha = alpha
-        self.model = None
-
-    def fit(self, X, y):
-        self.model = Ridge(alpha=self.alpha)
-        self.model.fit(X, y)
-        return self
-
-    def predict(self, X):
-        return self.model.predict(X)
-
-    def score(self, X, y):
-        return self.model.score(X, y)
-
-
-class LassoRunner(BaseMLModel):
-    """Lasso Regression model runner."""
-
-    def __init__(self, alpha=1.0):
-        self.alpha = alpha
-        self.model = None
-
-    def fit(self, X, y):
-        self.model = Lasso(alpha=self.alpha)
-        self.model.fit(X, y)
-        return self
-
-    def predict(self, X):
-        return self.model.predict(X)
-
-    def score(self, X, y):
-        return self.model.score(X, y)
+        return {
+            "accuracy": accuracy,
+            "detailed_report": report
+        }

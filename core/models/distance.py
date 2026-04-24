@@ -1,51 +1,68 @@
-# Distance-based Models - KNNRunner, SVMRunner
-from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
-from sklearn.svm import SVC, SVR
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score, classification_report
+from typing import Dict, Any
+
 from core.base_model import BaseMLModel
 
-
 class KNNRunner(BaseMLModel):
-    """K-Nearest Neighbors model runner for classification and regression."""
+    """
+    Concrete implementation of a K-Nearest Neighbors model.
+    """
 
-    def __init__(self, n_neighbors=5):
-        self.n_neighbors = n_neighbors
-        self.model = None
+    def __init__(self, **kwargs):
+        # Pass any kwargs (hyperparameters) up to the base class
+        super().__init__(**kwargs)
+        # Initialize the scikit-learn model
+        self.model = KNeighborsClassifier(**self.hyperparameters)
 
-    def fit(self, X, y):
-        # Determine if classification or regression based on y values
-        if len(set(y)) <= 2:
-            self.model = KNeighborsClassifier(n_neighbors=self.n_neighbors)
-        else:
-            self.model = KNeighborsRegressor(n_neighbors=self.n_neighbors)
-        self.model.fit(X, y)
-        return self
+    def train(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
+        """Fits the model to the training data."""
+        self.model.fit(X_train, y_train)
 
-    def predict(self, X):
-        return self.model.predict(X)
+    def predict(self, X_test: pd.DataFrame) -> np.ndarray:
+        """Generates predictions on new data."""
+        return self.model.predict(X_test)
+    
+    def evaluate(self, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, Any]:
+        """Returns a dictionary of performance metrics."""
+        predictions = self.predict(X_test)
+        accuracy = accuracy_score(y_test, predictions)
+        report = classification_report(y_test, predictions, output_dict=True)
 
-    def score(self, X, y):
-        return self.model.score(X, y)
-
+        return {
+            "accuracy": accuracy,
+            "detailed_report": report
+        }
 
 class SVMRunner(BaseMLModel):
-    """Support Vector Machine model runner for classification and regression."""
+    """
+    Concrete implementation of a Support Vector Machine model.
+    """
 
-    def __init__(self, kernel='rbf', random_state=42):
-        self.kernel = kernel
-        self.random_state = random_state
-        self.model = None
+    def __init__(self, **kwargs):
+        # Pass any kwargs (hyperparameters) up to the base class
+        super().__init__(**kwargs)
+        # Initialize the scikit-learn model
+        self.model = SVC(**self.hyperparameters)
 
-    def fit(self, X, y):
-        # Determine if classification or regression based on y values
-        if len(set(y)) <= 2:
-            self.model = SVC(kernel=self.kernel, random_state=self.random_state)
-        else:
-            self.model = SVR(kernel=self.kernel)
-        self.model.fit(X, y)
-        return self
+    def train(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
+        """Fits the model to the training data."""
+        self.model.fit(X_train, y_train)
 
-    def predict(self, X):
-        return self.model.predict(X)
+    def predict(self, X_test: pd.DataFrame) -> np.ndarray:
+        """Generates predictions on new data."""
+        return self.model.predict(X_test)
+    
+    def evaluate(self, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, Any]:
+        """Returns a dictionary of performance metrics."""
+        predictions = self.predict(X_test)
+        accuracy = accuracy_score(y_test, predictions)
+        report = classification_report(y_test, predictions, output_dict=True)
 
-    def score(self, X, y):
-        return self.model.score(X, y)
+        return {
+            "accuracy": accuracy,
+            "detailed_report": report
+        }

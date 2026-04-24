@@ -1,55 +1,46 @@
-# Tree Models - RandomForestRunner, DecisionTreeRunner
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+from typing import Dict, Any
+
 from core.base_model import BaseMLModel
 
-
 class RandomForestRunner(BaseMLModel):
-    """Random Forest model runner for classification and regression."""
-
-    def __init__(self, n_estimators=100, random_state=42):
-        self.n_estimators = n_estimators
-        self.random_state = random_state
-        self.model = None
-
-    def fit(self, X, y):
-        if len(set(y)) <= 2:
-            self.model = RandomForestClassifier(
-                n_estimators=self.n_estimators,
-                random_state=self.random_state
-            )
+    """
+    Concrete implementation of a Random Forest model.
+    """
+    def __init__(self, task_type='classification', **kwargs):
+        # Pass any kwargs (hyperparameters) up to the base class
+        super().__init__(**kwargs)
+        self.task_type = task_type
+        # Initialize the scikit-learn model with the provided hyperparameters
+        if self.task_type == "classification":
+            self.model = RandomForestClassifier(**self.hyperparameters)
         else:
-            self.model = RandomForestRegressor(
-                n_estimators=self.n_estimators,
-                random_state=self.random_state
-            )
-        self.model.fit(X, y)
-        return self
+            # You can add RandomForestRegressor logic here later
+            raise ValueError("Only 'classification' is supported in the MVP.")
+        
+    
+    def train(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
+        """Fits the model to the training data."""
+        self.model.fit(X_train, y_train)
 
-    def predict(self, X):
-        return self.model.predict(X)
+    def predict(self, X_test: pd.DataFrame) -> np.ndarray:
+        """Generates predictions on new data."""
+        return self.model.predict(X_test)
+    
+    def evaluate(self, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, Any]:
+        """Returns a dictionary of performance metrics (Accuracy, MSE, etc.)."""
+        predictions = self.predict(X_test)
 
-    def score(self, X, y):
-        return self.model.score(X, y)
+        #calculate core metrics
+        accuracy = accuracy_score(y_test, predictions)
 
+        # output_dict=True makes this incredibly easy to return as JSON later
+        report = classification_report(y_test, predictions, output_dict=True)
 
-class DecisionTreeRunner(BaseMLModel):
-    """Decision Tree model runner for classification and regression."""
-
-    def __init__(self, random_state=42):
-        self.random_state = random_state
-        self.model = None
-
-    def fit(self, X, y):
-        if len(set(y)) <= 2:
-            self.model = DecisionTreeClassifier(random_state=self.random_state)
-        else:
-            self.model = DecisionTreeRegressor(random_state=self.random_state)
-        self.model.fit(X, y)
-        return self
-
-    def predict(self, X):
-        return self.model.predict(X)
-
-    def score(self, X, y):
-        return self.model.score(X, y)
+        return {
+            "accuracy": accuracy,
+            "detailed_report": report
+        }
