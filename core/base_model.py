@@ -14,7 +14,7 @@ class BaseMLModel(ABC):
         self.hyperparameters = kwargs
 
     @abstractmethod
-    def fit(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
+    def train(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
         """Fits the model to the training data."""
         pass
 

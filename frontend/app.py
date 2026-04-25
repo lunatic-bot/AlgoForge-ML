@@ -2,9 +2,10 @@
 import streamlit as st
 import pandas as pd
 import requests
-from frontend.components import render_sidebar, render_model_card
+import json
+from components import render_sidebar, render_model_card
 
-# API base URL
+# API base URL (Removed the trailing /api since our backend routes are at the root)
 API_URL = "http://localhost:8000"
 
 st.set_page_config(
@@ -16,6 +17,10 @@ st.set_page_config(
 st.title("🤖 AlgoForge-ML")
 st.markdown("Machine Learning made simple - Train models and make predictions")
 
+# --- Session State Management ---
+# This allows the app to remember the model_id between page clicks
+if "model_id" not in st.session_state:
+    st.session_state["model_id"] = ""
 
 def main():
     # Render sidebar
@@ -28,91 +33,139 @@ def main():
     elif page == "Datasets":
         render_datasets_page()
 
-
 def render_train_page():
     """Render the model training page."""
-    st.header("Train a Model")
+    st.header("⚙️ Train a Model")
     
+    # 1. Fetch available options from the backend dynamically
+    try:
+        models_res = requests.get(f"{API_URL}/models").json()
+        datasets_res = requests.get(f"{API_URL}/datasets").json()
+        model_options = [m["name"] for m in models_res]
+        dataset_options = [d["name"] for d in datasets_res]
+    except Exception:
+        st.error("⚠️ Cannot connect to backend. Make sure FastAPI is running on port 8000.")
+        return
+
     col1, col2 = st.columns(2)
     
     with col1:
-        model_type = st.selectbox(
-            "Select Model",
-            ["random_forest", "decision_tree", "logistic_regression", 
-             "linear_regression", "knn", "svm"]
-        )
+        model_type = st.selectbox("Select Algorithm", model_options)
+        test_size = st.slider("Test Set Size", min_value=0.1, max_value=0.5, value=0.2, step=0.05)
         
     with col2:
-        data_path = st.text_input("Data Path", "data/raw/titanic.csv")
+        dataset_name = st.selectbox("Select Dataset", dataset_options)
+        target_column = st.text_input("Target Column", "target")
     
-    target_column = st.text_input("Target Column", "survived")
-    
-    if st.button("Train Model"):
-        with st.spinner("Training model..."):
+    if st.button("Train Model", type="primary"):
+        with st.spinner(f"Training {model_type} on {dataset_name}..."):
             try:
-                response = requests.post(
-                    f"{API_URL}/api/train",
-                    json={
-                        "model_type": model_type,
-                        "data_path": data_path,
-                        "target_column": target_column
-                    }
-                )
+                # 2. Match the exact Pydantic TrainRequest schema
+                payload = {
+                    "model_type": model_type,
+                    "dataset_name": dataset_name,
+                    "target_column": target_column,
+                    "test_size": test_size,
+                    "random_state": 42,
+                    "hyperparameters": {}
+                }
+                
+                response = requests.post(f"{API_URL}/train", json=payload)
+                
                 if response.status_code == 200:
                     result = response.json()
                     st.success(result["message"])
-                    st.metric("Model Score", f"{result['score']:.4f}")
-                    st.info(f"Model ID: {result['model_id']}")
+                    
+                    # Save ID to session state so it auto-fills on the Predict page!
+                    st.session_state["model_id"] = result["model_id"]
+
+                    #Save the required features to session state
+                    st.session_state["expected_features"] = result["expected_features"]
+                    
+                    col_a, col_b = st.columns(2)
+                    col_a.metric("Model Score (Accuracy)", f"{result['accuracy'] * 100:.2f}%")
+                    col_b.info(f"Model ID: {result['model_id']}")
+                    
+                    # Display the detailed classification report beautifully
+                    st.subheader("Classification Report")
+                    report_df = pd.DataFrame(result["report"]).transpose()
+                    st.dataframe(report_df.style.highlight_max(axis=0), use_container_width=True)
                 else:
-                    st.error(f"Error: {response.text}")
+                    st.error(f"Error {response.status_code}: {response.text}")
             except Exception as e:
                 st.error(f"Failed to connect to API: {str(e)}")
-
 
 def render_predict_page():
     """Render the prediction page."""
-    st.header("Make Predictions")
+    st.header("🔮 Make Predictions")
     
-    model_id = st.text_input("Model ID", "")
-    st.markdown("Enter features (comma-separated):")
-    features = st.text_input("Features", "1,2,3,4,5")
+    # Auto-fill from session state if they just trained a model
+    model_id = st.text_input("Model ID", value=st.session_state["model_id"])
     
-    if st.button("Predict"):
-        with st.spinner("Making prediction..."):
+    st.markdown("Enter features as a JSON dictionary matching the dataset columns:")
+
+    #Dynamically generate the JSON template!
+    expected_features = st.session_state.get("expected_features", [])
+
+    if expected_features:
+        # Create a dictionary with 0.0 for every required feature
+        default_dict = {feature: 0.0 for feature in expected_features}
+        default_json = json.dumps(default_dict, indent=2)
+    else:
+        # Default JSON asking user to train before testing
+        default_json = "{\n  // Train a model first to auto-generate the required fields\n}"
+    
+    features_input = st.text_area("Features (JSON)", value=default_json, height=150)
+    
+    if st.button("Predict", type="primary"):
+        if not model_id:
+            st.warning("Please enter a Model ID first.")
+            return
+            
+        with st.spinner("Analyzing data..."):
             try:
-                feature_list = [float(x.strip()) for x in features.split(",")]
-                response = requests.post(
-                    f"{API_URL}/api/predict",
-                    json={
-                        "model_id": model_id,
-                        "features": feature_list
-                    }
-                )
+                # Parse the JSON string from the text area into a Python dictionary
+                feature_dict = json.loads(features_input)
+                
+                # Match the exact Pydantic PredictRequest schema
+                payload = {
+                    "model_id": model_id,
+                    "features": feature_dict
+                }
+                
+                response = requests.post(f"{API_URL}/predict", json=payload)
+                
                 if response.status_code == 200:
                     result = response.json()
                     st.success(result["message"])
-                    st.metric("Prediction", result["prediction"][0])
+                    # st.metric("Predicted Class", result["prediction"][0])
+                    # Convert it to string and title-case it so "setosa" becomes "Setosa"
+                    st.metric("Predicted Class", str(result["prediction"]).title())
                 else:
-                    st.error(f"Error: {response.text}")
+                    st.error(f"Error {response.status_code}: {response.text}")
+            except json.JSONDecodeError:
+                st.error("Invalid JSON format. Please ensure your features use double quotes and standard JSON syntax.")
             except Exception as e:
                 st.error(f"Failed to connect to API: {str(e)}")
 
-
 def render_datasets_page():
     """Render the datasets page."""
-    st.header("Available Datasets")
+    st.header("📊 Available Datasets")
     
     try:
-        response = requests.get(f"{API_URL}/api/datasets")
+        response = requests.get(f"{API_URL}/datasets")
         if response.status_code == 200:
-            datasets = response.json()["datasets"]
+            # Our backend returns a direct list [{}, {}], not {"datasets": []}
+            datasets = response.json() 
+            
             for ds in datasets:
-                st.markdown(f"- **{ds['name']}**: {ds['path']}")
+                with st.expander(f"📁 **{ds['name']}**", expanded=True):
+                    st.write(f"**Description:** {ds['description']}")
+                    st.write(f"**Target Column:** `{ds['target_column']}`")
         else:
             st.error("Failed to load datasets")
     except Exception as e:
         st.error(f"Failed to connect to API: {str(e)}")
-
 
 if __name__ == "__main__":
     main()

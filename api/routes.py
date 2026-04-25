@@ -1,107 +1,138 @@
-# /train, /predict, /datasets endpoints
 from fastapi import APIRouter, HTTPException
-from api.schemas import TrainRequest, TrainResponse, PredictRequest, PredictResponse
-from core.models.tree_models import RandomForestRunner, DecisionTreeRunner
-from core.models.linear_models import LogisticRegressionRunner, LinearRegressionRunner
-from core.models.distance import KNNRunner, SVMRunner
-from core.data_loader import DataLoader
+import uuid
 import pandas as pd
+from typing import List, Dict, Any 
 
-router = APIRouter(prefix="/api", tags=["ml"])
+from sklearn.datasets import load_iris, load_breast_cancer
 
-# Model registry
-MODELS = {
-    "random_forest": RandomForestRunner,
-    "decision_tree": DecisionTreeRunner,
-    "logistic_regression": LogisticRegressionRunner,
-    "linear_regression": LinearRegressionRunner,
-    "knn": KNNRunner,
-    "svm": SVMRunner,
+
+# Import custom architecture
+from core.data_loader import MLDataLoader
+from core.models.tree_models import RandomForestRunner
+from core.models.linear_models import LogisticRegressionRunner
+from core.models.distance import KNNRunner, SVMRunner
+
+from api.schemas import (
+    TrainRequest, TrainResponse, PredictRequest, 
+    PredictResponse, DatasetInfo, ModelInfo)
+
+# initialize the router
+router = APIRouter()
+
+# state management
+MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {}
+
+AVAILABLE_MODELS ={
+    "Random Forest": {"class" : RandomForestRunner, "requires_scaling": False, "type":"Tree"},
+    "Logistic Regression": {"class" : LogisticRegressionRunner, "requires_scaling": True, "type":"Linear"},
+    "KNN" : {"class" : KNNRunner, "requires_scaling": True, "type":"Distance"},
+    "SVM" : {"class" : SVMRunner, "requires_scaling": True, "type":"Distance"}   
 }
 
-# Store trained models
-trained_models = {}
+#Endpoints
+@router.get("/datasets", response_model=List[DatasetInfo])
+def get_datasets():
+    return [
+        DatasetInfo(name="iris", description="Multiclass classification (Flower types)", target_column="target"),
+        DatasetInfo(name="breast_cancer", description="Binary classification (Cancer detection)", target_column="target")
+    ]
+
+@router.get("/models", response_model=List[ModelInfo])
+def get_models():
+    return [
+        ModelInfo(name=name, type=info["type"], requires_scaling=info["requires_scaling"]) for name, info in AVAILABLE_MODELS.items()
+    ]
 
 
 @router.post("/train", response_model=TrainResponse)
 def train_model(request: TrainRequest):
-    """Train an ML model on the provided dataset."""
+    if request.model_type not in AVAILABLE_MODELS:
+        raise HTTPException(status_code=400, detail=f"Invalid model type: {request.model_type}")
+    
+    if request.dataset_name == "breast_cancer":
+        data = load_breast_cancer()
+        # Creates {0: 'malignant', 1: 'benign'}
+        target_mapping = {i: str(name) for i, name in enumerate(data.target_names)}
+    elif request.dataset_name == "iris":
+        data = load_iris()
+        # Creates {0: 'setosa', 1: 'versicolor', 2: 'virginica'}
+        target_mapping = {i: str(name) for i, name in enumerate(data.target_names)}
+    else:
+        raise HTTPException(status_code=400, detail=f"Dataset not found: {request.dataset_name}")
+    
+    df = pd.DataFrame(data.data, columns=data.feature_names)
+    df[request.target_column] = data.target
+
+    model_config = AVAILABLE_MODELS[request.model_type]
+    requires_scaling = model_config["requires_scaling"]
+    ModelClass = model_config["class"]
+
+    loader = MLDataLoader(target_column=request.target_column, test_size=request.test_size)
     try:
-        # Load data
-        loader = DataLoader()
-        data = loader.load_csv(request.data_path)
-        
-        # Preprocess
-        X, y = loader.preprocess(data, target_column=request.target_column)
-        
-        # Split data
-        X_train, X_test, y_train, y_test = loader.split(X, y)
-        
-        # Scale features
-        X_train_scaled, X_test_scaled = loader.scale_features(X_train, X_test)
-        
-        # Get model
-        model_class = MODELS.get(request.model_type)
-        if not model_class:
-            raise HTTPException(status_code=400, detail=f"Unknown model: {request.model_type}")
-        
-        # Train
-        model = model_class()
-        model.fit(X_train_scaled, y_train)
-        
-        # Score
-        score = model.score(X_test_scaled, y_test)
-        
-        # Store model
-        model_id = f"{request.model_type}_{len(trained_models)}"
-        trained_models[model_id] = model
-        
-        return TrainResponse(
-            model_id=model_id,
-            model_type=request.model_type,
-            score=score,
-            message="Model trained successfully"
-        )
+        X_train, X_test, y_train, y_test = loader.process_data(df, requires_scaling=requires_scaling)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Data processing failed: {str(e)}")
+
+    model = ModelClass(**(request.hyperparameters or {}))
+    model.train(X_train, y_train)
+    results = model.evaluate(X_test, y_test)
+
+    model_id = str(uuid.uuid4())
+    MODEL_REGISTRY[model_id] = {
+        "model": model,
+        "loader": loader,
+        "requires_scaling": requires_scaling,
+        "feature_names": list(X_train.columns),
+        "target_mapping": target_mapping  # Save the translation dictionary
+    }
+
+    return TrainResponse(
+        model_id=model_id,
+        model_type=request.model_type,
+        accuracy=results["accuracy"],
+        report=results["detailed_report"],
+        message="Model trained and saved successfully",
+        expected_features=list(X_train.columns)
+
+    )
 
 
 @router.post("/predict", response_model=PredictResponse)
-def predict(request: PredictRequest):
-    """Make predictions using a trained model."""
+def make_prediction(request: PredictRequest):
+    if request.model_id not in MODEL_REGISTRY:
+        raise HTTPException(status_code=404, detail=f"Model not found: {request.model_id}")
+    
+    saved_state = MODEL_REGISTRY[request.model_id]
+    model = saved_state["model"]
+    loader = saved_state["loader"]
+    requires_scaling = saved_state["requires_scaling"]
+    feature_names = saved_state["feature_names"]
+
     try:
-        model = trained_models.get(request.model_id)
-        if not model:
-            raise HTTPException(status_code=404, detail="Model not found")
-        
-        # Convert input to array
-        import numpy as np
-        X = np.array(request.features).reshape(1, -1)
-        
-        # Predict
-        prediction = model.predict(X)
-        
-        return PredictResponse(
-            model_id=request.model_id,
-            prediction=prediction.tolist(),
-            message="Prediction made successfully"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        input_df = pd.DataFrame([request.features], columns=feature_names)
+    except KeyError:
+        raise HTTPException(status_code=400, detail="Provided features do not match training data.")
+    
+    if requires_scaling:
+        input_df = loader.scaler.transform(input_df)
+    
+    # prediction = model.predict(input_df)
+    # model.predict returns an array like [0]. Grab that first item and make it an integer.
+    raw_prediction = int(model.predict(input_df)[0]) 
+    
+    # Grab the translation dictionary saved during training
+    target_mapping = saved_state.get("target_mapping", {})
+    
+    # If for some reason it's not in the dictionary, fallback to the raw number.
+    human_readable_label = target_mapping.get(raw_prediction, raw_prediction)
+
+    return PredictResponse(
+        model_id=request.model_id,
+        prediction=human_readable_label,
+        message="Prediction made successfully"
+    )
+
+    
 
 
-@router.get("/datasets")
-def list_datasets():
-    """List available datasets."""
-    return {
-        "datasets": [
-            {"name": "titanic", "path": "data/raw/titanic.csv"},
-            {"name": "housing", "path": "data/raw/housing.csv"},
-        ]
-    }
-
-
-@router.get("/models")
-def list_models():
-    """List available model types."""
-    return {"models": list(MODELS.keys())}
+    
