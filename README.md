@@ -29,8 +29,6 @@ AlgoForge is an end-to-end, API-driven machine learning platform that allows use
 - **Streamlit:** Rapid UI prototyping and interactive data dashboards.
 - **Requests:** HTTP library for API communication.
 
----
-
 ## 🏗️ Architecture
 
 ```
@@ -156,17 +154,6 @@ Then open:
 - [ ] Feature selection techniques
 - [ ] Cross-validation implementation
 - [ ] Learning curves visualization
-
-## 📝 Tech Stack
-
-| Layer           | Technology    |
-| --------------- | ------------- |
-| ML Library      | scikit-learn  |
-| API Framework   | FastAPI       |
-| Frontend        | Streamlit     |
-| Data Processing | pandas, numpy |
-| Testing         | pytest, httpx |
-| Server          | Uvicorn       |
 
 ## 📄 License
 
