@@ -76,20 +76,40 @@ def render_train_page():
                     result = response.json()
                     st.success(result["message"])
                     
-                    # Save ID to session state so it auto-fills on the Predict page!
+                    # Save ID to session state so it auto-fills on the Predict page
                     st.session_state["model_id"] = result["model_id"]
 
                     #Save the required features to session state
                     st.session_state["expected_features"] = result["expected_features"]
                     
+                    st.subheader("📊 Training Results")
                     col_a, col_b = st.columns(2)
-                    col_a.metric("Model Score (Accuracy)", f"{result['accuracy'] * 100:.2f}%")
+
+                    # col_a.metric("Model Score (Accuracy)", f"{result['accuracy'] * 100:.2f}%")
                     col_b.info(f"Model ID: {result['model_id']}")
+
+                    # dashboard routing
+                    if result["task_type"] == "classification":
+                        col_a.metric("Model Score (Accuracy)", f"{result['metrics']['accuracy'] * 100:.2f}%")
+                        st.markdown("**Classification Report:**")
+                        # The classification runners return "detailed_report" inside the metrics dict
+                        report_df = pd.DataFrame(result["metrics"]["detailed_report"]).transpose()
+                        st.dataframe(report_df.style.heighlight_max(axis=0), use_container_width=True)
+                    
+                    elif result["task_type"] == "regression":
+                        # Render regression dashboard
+                        col_a.metric("Model Score (R2)", f"{result['metrics']['r2_score']:.4f}")
+                        col1, col2, col3 = st.columns(3)
+                        col1.metric("Mean Squared Error (MSE)", f"{result['metrics']['mse']:.2f}")
+                        col2.metric("Root Mean Squared Error (RMSE)", f"{result['metrics']['rmse']:.2f}")
+                        st.info("💡 **R² Score** closer to 1.0 means the model explains the variance well. Lower **RMSE** means the model's predictions are closer to the actual values.")
+
+                        
                     
                     # Display the detailed classification report beautifully
-                    st.subheader("Classification Report")
-                    report_df = pd.DataFrame(result["report"]).transpose()
-                    st.dataframe(report_df.style.highlight_max(axis=0), use_container_width=True)
+                    # st.subheader("Classification Report")
+                    # report_df = pd.DataFrame(result["report"]).transpose()
+                    # st.dataframe(report_df.style.highlight_max(axis=0), use_container_width=True)
                 else:
                     st.error(f"Error {response.status_code}: {response.text}")
             except Exception as e:
@@ -140,7 +160,16 @@ def render_predict_page():
                     st.success(result["message"])
                     # st.metric("Predicted Class", result["prediction"][0])
                     # Convert it to string and title-case it so "setosa" becomes "Setosa"
-                    st.metric("Predicted Class", str(result["prediction"]).title())
+                    # st.metric("Predicted Class", str(result["prediction"]).title())
+                    
+                    prediction_value = result["prediction"]
+                    # If the API returned a float, it's a Regression prediction
+                    if isinstance(prediction_value, float):
+                        st.metric("Predicted Value (Continuous)", f"{prediction_value:.2f}")
+                        st.info("💡 Note: For the Diabetes dataset, this number represents disease progression one year after baseline (Scale: 25 - 346).")
+                    # Otherwise, it's a Classification label
+                    else:
+                        st.metric("Predicted Class", str(prediction_value).title())
                 else:
                     st.error(f"Error {response.status_code}: {response.text}")
             except json.JSONDecodeError:

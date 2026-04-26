@@ -18,8 +18,8 @@ class TrainResponse(BaseModel):
     """Response model for training endpoint."""
     model_id:str
     model_type:str
-    accuracy:float
-    report:Dict[str, Any] # classification report
+    task_type:str #NEW: "classification" or "regression"
+    metrics:Dict[str, Any] #Flexible dictionary for any math metrics
     message:str
     expected_features: List[str]
 
