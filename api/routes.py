@@ -127,7 +127,13 @@ def make_prediction(request: PredictRequest):
         raise HTTPException(status_code=400, detail="Provided features do not match training data.")
     
     if requires_scaling:
-        input_df = loader.scaler.transform(input_df)
+        # The scaler strips the column names and returns a NumPy array
+        scaled_values = loader.scaler.transform(input_df)
+        # FIX: We must wrap that raw array BACK into a Pandas DataFrame 
+        # using the exact column names the model is expecting!
+        input_df = pd.DataFrame(scaled_values, columns=feature_names)
+
+
     
     # model.predict returns an array like [0]. Grabing that first item and make it an integer.
     raw_prediction = int(model.predict(input_df)[0]) 
