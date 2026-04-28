@@ -2,6 +2,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from typing import Tuple
+from sklearn.impute import SimpleImputer
 
 class MLDataLoader:
     """
@@ -13,6 +14,7 @@ class MLDataLoader:
         self.random_state = random_state
         self.scaler = StandardScaler()
         self.label_encoder = LabelEncoder()
+        self.imputer = None
     
     def process_data(self, df: pd.DataFrame, requires_scaling: bool = True)->Tuple:
         """
@@ -23,15 +25,24 @@ class MLDataLoader:
             requires_scaling: True for distance/linear models, False for tree models.
         """
 
-        # 1. Basic Imputation (Dropping missing values for MVP, can upgrade to SimpleImputer later)
-        df_clean = df.dropna().copy()
+        # # 1. Basic Imputation (Dropping missing values for MVP, can upgrade to SimpleImputer later)
+        # df_clean = df.dropna().copy()
 
-        # 2. Separate Features (X) and Target (y)
-        if self.target_column not in df_clean.columns:
+        # 1. Separate Features (X) and Target (y)
+        if self.target_column not in df.columns:
             raise ValueError(f"Target column '{self.target_column}' not found in dataset.")
     
-        X = df_clean.drop(columns=[self.target_column])
-        y = df_clean[self.target_column]
+        X = df.drop(columns=[self.target_column])
+        y = df[self.target_column]
+
+        # 2. Advanced Imputation (Handling missing real-world data)
+        # We isolate numeric columns to fill missing numbers with the median
+        numeric_cols = X.select_dtypes(include=['number']).columns
+        if len(numeric_cols) > 0:
+            self.imputer = SimpleImputer(strategy='median')
+            # Fit and transform the data, then rebuild the DataFrame
+            X_imputed = self.imputer.fit_transform(X[numeric_cols])
+            X.loc[:, numeric_cols] = X_imputed
 
         # 3. Handle Categorical Features (One-Hot Encoding)
         # Converts text columns into 0s and 1s so math algorithms can process them

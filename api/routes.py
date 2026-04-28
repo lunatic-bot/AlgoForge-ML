@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 import uuid
+import os
 import pandas as pd
 from typing import List, Dict, Any 
 
@@ -18,8 +19,14 @@ from api.schemas import (
     TrainRequest, TrainResponse, PredictRequest, 
     PredictResponse, DatasetInfo, ModelInfo)
 
+
+
+
 # initialize the router
 router = APIRouter()
+
+UPLOAD_DIR = "data/raw"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # state management
 MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {}
@@ -47,6 +54,34 @@ def get_datasets():
         DatasetInfo(name="diabetes", description="Regression (Disease progression)", target_column="target")
     ]
 
+
+@router.post("/upload")
+async def upload_dataset(file: UploadFile = File(...)):
+    """Accepts a CSV, saves it locally, and returns the column headers."""
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Only CSV files are supported.")
+    
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+
+    #save the file to data/raw folder
+    with open(file_path, "wb") as buffer:
+        content = await file.read()
+        buffer.write(content)
+
+    # read the coluumns using pandas 
+    try:
+        df = pd.read_csv(file_path)
+        columns = df.columns.tolist()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read CSV: {str(e)}")
+    
+
+    return {
+        "filename": file.filename,
+        "columns": columns,
+        "message": "Dataset uploaded successfully"
+    }
+
 @router.get("/models", response_model=List[ModelInfo])
 def get_models():
     return [
@@ -63,18 +98,35 @@ def train_model(request: TrainRequest):
         data = load_breast_cancer()
         # Creates {0: 'malignant', 1: 'benign'}
         target_mapping = {i: str(name) for i, name in enumerate(data.target_names)}
+    
     elif request.dataset_name == "iris":
         data = load_iris()
         # Creates {0: 'setosa', 1: 'versicolor', 2: 'virginica'}
         target_mapping = {i: str(name) for i, name in enumerate(data.target_names)}
+    
     elif request.dataset_name == "diabetes":
         data = load_diabetes()
         target_mapping = None # Regression doesn't use text labels
+    
+    # load custom uploaded CSV
+    elif request.dataset_name.endswith(".csv"):
+        file_path = os.path.join(UPLOAD_DIR, request.dataset_name)
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=400, detail=f"Uploaded dataset not found on server.")
+        # Load the custom CSV directly into the dataframe
+        df = pd.read_csv(file_path)
+
+        # If the target is categorical (like text), we leave target_mapping empty for MVP 
+        # (Scikit-Learn handles text targets automatically, we just won't translate them back yet)
+        target_mapping = None
+    
     else:
         raise HTTPException(status_code=400, detail=f"Dataset not found: {request.dataset_name}")
     
-    df = pd.DataFrame(data.data, columns=data.feature_names)
-    df[request.target_column] = data.target
+    #Only run this mapping if it's a built-in Scikit-Learn dataset
+    if not request.dataset_name.endswith(".csv"):
+        df = pd.DataFrame(data.data, columns=data.feature_names)
+        df[request.target_column] = data.target
 
     model_config = AVAILABLE_MODELS[request.model_type]
     requires_scaling = model_config["requires_scaling"]

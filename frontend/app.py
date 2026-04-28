@@ -46,6 +46,10 @@ def render_train_page():
     except Exception:
         st.error("⚠️ Cannot connect to backend. Make sure FastAPI is running on port 8000.")
         return
+    
+    # Radio toggle for data source
+    data_source = st.radio("Data Source", ["Use Built-in Dataset", "Upload Custom CSV"], horizontal=True)
+    st.markdown("---")
 
     col1, col2 = st.columns(2)
     
@@ -54,10 +58,41 @@ def render_train_page():
         test_size = st.slider("Test Set Size", min_value=0.1, max_value=0.5, value=0.2, step=0.05)
         
     with col2:
-        dataset_name = st.selectbox("Select Dataset", dataset_options)
-        target_column = st.text_input("Target Column", "target")
+        #Dynamic UI based on Data Source toggle
+        if data_source == "Use Built-in Dataset":
+            dataset_name = st.selectbox("Select Dataset", dataset_options)
+            target_column = st.text_input("Target Column", "target")
+        else:
+            # Custom CSV upload logic
+            uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
+            if uploaded_file is not None:
+                with st.spinner("Upploading and analysing the file..."):
+                    # send the file to our fastAPI endpoint
+                    files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
+                    upload_res = requests.post(f"{API_URL}/upload", files=files)
+
+                    if upload_res.status_code == 200:
+                        st.session_state["custom_filename"] = upload_res.json()["filename"]
+                        st.session_state["custom_columns"] = upload_res.json()["columns"]
+                    else:
+                        # If FastAPI throws an error, show it gracefully in the UI without crashing
+                        st.error(f"Backend Error: {upload_res.status_code} - {upload_res.text}")
+
+            # if file has been successfully uploaded and saved in state
+            if "custom_filename" in st.session_state and "custom_columns" in st.session_state:
+                dataset_name = st.session_state["custom_filename"]
+                st.success(f"Successfully Loaded : {dataset_name}")
+                # dynamically generate the target dropdown from csv headers
+                target_column = st.selectbox("Select Target Variable (What are you predicting?)", st.session_state["custom_columns"])
+            else:
+                dataset_name = None
+                target_column = None
+
+        # we disable the train button if they choose upload but haven't uploaded a file
+        disable_train = data_source == "Upload Custom CSV" and dataset_name is None
+
     
-    if st.button("Train Model", type="primary"):
+    if st.button("Train Model", type="primary", disabled=disable_train):
         with st.spinner(f"Training {model_type} on {dataset_name}..."):
             try:
                 # 2. Match the exact Pydantic TrainRequest schema
@@ -94,7 +129,7 @@ def render_train_page():
                         st.markdown("**Classification Report:**")
                         # The classification runners return "detailed_report" inside the metrics dict
                         report_df = pd.DataFrame(result["metrics"]["detailed_report"]).transpose()
-                        st.dataframe(report_df.style.heighlight_max(axis=0), use_container_width=True)
+                        st.dataframe(report_df.style.highlight_max(axis=0), use_container_width=True)
                     
                     elif result["task_type"] == "regression":
                         # Render regression dashboard
