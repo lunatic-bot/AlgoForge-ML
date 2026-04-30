@@ -209,7 +209,7 @@ def render_predict_page():
                     # If the API returned a float, it's a Regression prediction
                     if isinstance(prediction_value, float):
                         st.metric("Predicted Value (Continuous)", f"{prediction_value:.2f}")
-                        st.info("💡 Note: For the Diabetes dataset, this number represents disease progression one year after baseline (Scale: 25 - 346).")
+                        # st.info("💡 Note: For the Diabetes dataset, this number represents disease progression one year after baseline (Scale: 25 - 346).")
                     # Otherwise, it's a Classification label
                     else:
                         st.metric("Predicted Class", str(prediction_value).title())

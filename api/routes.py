@@ -153,7 +153,8 @@ def train_model(request: TrainRequest):
         "loader": loader,
         "requires_scaling": requires_scaling,
         "feature_names": list(X_train.columns),
-        "target_mapping": target_mapping  # Save the translation dictionary
+        "target_mapping": target_mapping,  # Save the translation dictionary
+        "task_type": model_config["task_type"]
     }
 
     return TrainResponse(
@@ -196,17 +197,30 @@ def make_prediction(request: PredictRequest):
     raw_prediction = int(model.predict(input_df)[0]) 
     
     # Grab the translation dictionary saved during training
-    target_mapping = saved_state.get("target_mapping", {})
+    target_mapping = saved_state.get("target_mapping")
+    task_type = saved_state.get("task_type", "classification") # Fallback to classification
     
-
-    # Fork the logic based on the task type
-    if target_mapping is not None:
+    #Fork logic based on the actual algorithm's task_type
+    if task_type == "classification":
         # It's Classification
         raw_pred_int = int(raw_prediction)
-        final_prediction = target_mapping.get(raw_pred_int, raw_pred_int)
+        # Translate to text if we have a dictionary, otherwise just return the int (0 or 1)
+        if target_mapping is not None:
+            final_prediction = target_mapping.get(raw_pred_int, raw_pred_int)
+        else:
+            final_prediction = raw_pred_int
     else:
         # It's Regression
         final_prediction = float(raw_prediction)
+
+    # # Fork the logic based on the task type
+    # if target_mapping is not None:
+    #     # It's Classification
+    #     raw_pred_int = int(raw_prediction)
+    #     final_prediction = target_mapping.get(raw_pred_int, raw_pred_int)
+    # else:
+    #     # It's Regression
+    #     final_prediction = float(raw_prediction)
 
     return PredictResponse(
         model_id=request.model_id,
