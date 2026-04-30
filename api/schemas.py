@@ -7,8 +7,8 @@ class TrainRequest(BaseModel):
     model_type:str = Field(..., description="Type of ML model to train (e.g. 'random_forest)")
     dataset_name:str = Field(..., description="Name of the dataset to use for training")
     target_column:str = Field(..., description="Name of the target column in the dataset")
-    test_size:float = Field(..., description="Proportion of data to use for testing")
-    random_state:int = Field(..., description="Random seed for reproducibility")
+    test_size:float = 0.2
+    random_state:int = 42
 
     drop_columns: list[str] = [] #Default to empty list if none provided
 
