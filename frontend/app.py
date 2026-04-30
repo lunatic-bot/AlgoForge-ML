@@ -84,9 +84,16 @@ def render_train_page():
                 st.success(f"Successfully Loaded : {dataset_name}")
                 # dynamically generate the target dropdown from csv headers
                 target_column = st.selectbox("Select Target Variable (What are you predicting?)", st.session_state["custom_columns"])
+                # Build a list of features the user can drop
+                available_features = [col for col in st.session_state["custom_columns"] if col != target_column]
+                # The Multiselect widget
+                drop_columns = st.multiselect("Select columns to DROP (e.g., Name, ID, Ticket)", options=available_features,
+                                              default=[])
+
             else:
                 dataset_name = None
                 target_column = None
+                drop_columns = []
 
         # we disable the train button if they choose upload but haven't uploaded a file
         disable_train = data_source == "Upload Custom CSV" and dataset_name is None
@@ -102,7 +109,8 @@ def render_train_page():
                     "target_column": target_column,
                     "test_size": test_size,
                     "random_state": 42,
-                    "hyperparameters": {}
+                    "hyperparameters": {},
+                    "drop_columns": drop_columns
                 }
                 
                 response = requests.post(f"{API_URL}/train", json=payload)

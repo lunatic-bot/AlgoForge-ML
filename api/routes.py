@@ -128,6 +128,11 @@ def train_model(request: TrainRequest):
         df = pd.DataFrame(data.data, columns=data.feature_names)
         df[request.target_column] = data.target
 
+    #Drop user-selected columns before any processing!
+    if request.drop_columns:
+        ## errors='ignore' ensures it doesn't crash if a column name is slightly wrong
+        df = df.drop(columns=request.drop_columns, errors='ignore')
+
     model_config = AVAILABLE_MODELS[request.model_type]
     requires_scaling = model_config["requires_scaling"]
     ModelClass = model_config["class"]

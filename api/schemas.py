@@ -10,6 +10,8 @@ class TrainRequest(BaseModel):
     test_size:float = Field(..., description="Proportion of data to use for testing")
     random_state:int = Field(..., description="Random seed for reproducibility")
 
+    drop_columns: list[str] = [] #Default to empty list if none provided
+
     #hyperparameters
     hyperparameters: Optional[Dict[str, Any]] = Field(default={}, description="Hyperparameters for the model")
 
