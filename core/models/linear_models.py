@@ -52,9 +52,9 @@ class LinearRegressionRunner(BaseMLModel):
         # We pass hyperparams like C (inverse regularization strength) or penalty (l1/l2)
         self.model = LinearRegression(**self.hyperparameters)
 
-    def train(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
-        """Fits the model to the training data."""
-        self.model.fit(X_train, y_train)
+    # def train(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
+    #     """Fits the model to the training data."""
+    #     self.model.fit(X_train, y_train)
 
     def predict(self, X_test: pd.DataFrame) -> np.ndarray:
         """Generates predictions on new data."""

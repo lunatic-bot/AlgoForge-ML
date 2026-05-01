@@ -56,6 +56,8 @@ def render_train_page():
     with col1:
         model_type = st.selectbox("Select Algorithm", model_options)
         test_size = st.slider("Test Set Size", min_value=0.1, max_value=0.5, value=0.2, step=0.05)
+        # Add the tuning switch
+        tune_hyperparameters = st.toggle("🧪 Enable Hyperparameter Tuning (GridSearchCV)")
         
     with col2:
         #Dynamic UI based on Data Source toggle
@@ -110,7 +112,8 @@ def render_train_page():
                     "test_size": test_size,
                     "random_state": 42,
                     "hyperparameters": {},
-                    "drop_columns": drop_columns
+                    "drop_columns": drop_columns,
+                    "tune_hyperparameters": tune_hyperparameters
                 }
                 
                 response = requests.post(f"{API_URL}/train", json=payload)

@@ -14,7 +14,7 @@ class BaseMLModel(ABC):
         self.model = None 
         self.hyperparameters = kwargs
 
-    @abstractmethod
+    # @abstractmethod
     def train(self, X_train: pd.DataFrame, y_train: pd.Series, tune: bool=False, param_grid: dict = None) -> None:
         """Fits the model to the training data."""
         if tune and param_grid:

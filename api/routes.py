@@ -38,8 +38,8 @@ os.makedirs(MODELS_DIR, exist_ok=True)
 
 AVAILABLE_MODELS ={
     # Classification
-    "Random Forest Classifier": {"class" : RandomForestRunner, "requires_scaling": False, "type":"Tree", "task_type": "classification"},
-    "Logistic Regression": {"class" : LogisticRegressionRunner, "requires_scaling": True, "type":"Linear", "task_type": "classification"},
+    "Random Forest Classifier": {"class" : RandomForestRunner, "requires_scaling": False, "type":"Tree", "task_type": "classification", "param_grid": {"n_estimators": [50, 100, 200], "max_depth": [None, 10, 20]}},
+    "Logistic Regression": {"class" : LogisticRegressionRunner, "requires_scaling": True, "type":"Linear", "task_type": "classification", "param_grid": {"C": [0.1, 1.0, 10.0]}},
     "KNN Classifier" : {"class" : KNNRunner, "requires_scaling": True, "type":"Distance", "task_type": "classification"},
     "SVM Classifier" : {"class" : SVMRunner, "requires_scaling": True, "type":"Distance", "task_type": "classification"},   
 
@@ -149,7 +149,8 @@ def train_model(request: TrainRequest):
         raise HTTPException(status_code=500, detail=f"Data processing failed: {str(e)}")
 
     model = ModelClass(**(request.hyperparameters or {}))
-    model.train(X_train, y_train)
+    model.train(X_train, y_train, tune=request.tune_hyperparameters, 
+        param_grid=model_config.get("param_grid"))
     results = model.evaluate(X_test, y_test)
 
     model_id = str(uuid.uuid4())
