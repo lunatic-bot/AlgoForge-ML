@@ -35,6 +35,8 @@ class PredictRequest(BaseModel):
     #Dict ensures feature names match training data perfectly
     features:Dict[str, Any] = Field(..., description="Features to use for prediction(mapped by column name)")
 
+    explanation: dict = None #Feature importance dictionary
+
 
 class PredictResponse(BaseModel):
     """Response model for prediction endpoint."""

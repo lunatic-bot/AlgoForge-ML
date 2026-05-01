@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 import uuid
 import os
 import joblib
+import shap
 import pandas as pd
 from typing import List, Dict, Any 
 
@@ -154,6 +155,13 @@ def train_model(request: TrainRequest):
     results = model.evaluate(X_test, y_test)
 
     model_id = str(uuid.uuid4())
+
+    # Sample the training data for the SHAP Explainer
+    # If the dataset is smaller than 50 rows, take them all. Otherwise, take 50.
+    sample_size = min(50, X_train.shape[0])
+    backgroud_data = shap.sample(X_train, sample_size)
+
+    
     # MODEL_REGISTRY[model_id] = {
     #     "model": model,
     #     "loader": loader,
@@ -169,7 +177,8 @@ def train_model(request: TrainRequest):
         "requires_scaling": requires_scaling,
         "feature_names": list(X_train.columns),
         "target_mapping": target_mapping,  # Save the translation dictionary
-        "task_type": model_config["task_type"]
+        "task_type": model_config["task_type"],
+        "background_data": backgroud_data,
     }
 
     # Create the file path and dump the dictionary to the hard drive
@@ -213,7 +222,12 @@ def make_prediction(request: PredictRequest):
     feature_names = saved_state["feature_names"]
 
     try:
-        input_df = pd.DataFrame([request.features], columns=feature_names)
+        input_df = pd.DataFrame([request.features])
+        # Force incoming Streamlit data to be floats to prevent SHAP crashes
+        input_df = input_df.astype(float) 
+        
+        # Ensure column order matches EXACTLY what the model expects
+        input_df = input_df[feature_names]
     except KeyError:
         raise HTTPException(status_code=400, detail="Provided features do not match training data.")
     
@@ -255,10 +269,30 @@ def make_prediction(request: PredictRequest):
     #     # It's Regression
     #     final_prediction = float(raw_prediction)
 
+
+    # Explain the prediction using SHAP
+    backgroud_data = saved_state.get("background_data")
+    explanation_dict = None
+
+    try:
+        if backgroud_data is not None:
+            # We have the universal explainer. It figures out the math based on the model type.
+            explainer = shap.Explainer(model.predict, backgroud_data)
+            shap_values = explainer(input_df)
+            
+            # map the feature names to their absolute SHAP impact values for this specific prediction
+            impact_scores = abs(shap_values.values[0])
+            explanation_dict = dict(zip(feature_names, impact_scores))
+
+    except Exception as e:
+        print(f"SHAP Error: {str(e)}") #if SHAP can't handle a specific model type yet
+        explaination_dict = None 
+
     return PredictResponse(
         model_id=request.model_id,
         prediction=final_prediction,
-        message="Prediction made successfully"
+        message="Prediction made successfully",
+        explanation=explanation_dict,
     )
 
     

@@ -47,6 +47,8 @@ class MLDataLoader:
         # 3. Handle Categorical Features (One-Hot Encoding)
         # Converts text columns into 0s and 1s so math algorithms can process them
         X = pd.get_dummies(X, drop_first=True)
+        # Forceing all columns (including new True/False dummies) to be strictly numeric floats
+        X = X.astype(float)
 
         # 4. Encode the Target Variable (if it's text like 'Yes'/'No')
         if y.dtype == 'object' or y.dtype.name == 'category':

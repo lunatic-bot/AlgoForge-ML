@@ -216,6 +216,20 @@ def render_predict_page():
                     # Otherwise, it's a Classification label
                     else:
                         st.metric("Predicted Class", str(prediction_value).title())
+
+
+                    if result.get("explanation"):
+                        st.markdown("---")
+                        st.subheader("🧠 Why did the model make this decision?")
+                        st.markdown("This chart shows which features had the highest impact on this specific prediction.")
+                        # # Convert dict to dataframe for Streamlit charting
+                        shap_df = pd.DataFrame.from_dict(
+                            result["explanation"],
+                            orient="index",
+                            columns=["Impact"],
+                        ).sort_values(by="Impact", ascending=False)
+                        st.bar_chart(shap_df, horizontal=True)
+
                 else:
                     st.error(f"Error {response.status_code}: {response.text}")
             except json.JSONDecodeError:
