@@ -15,6 +15,9 @@ class TrainRequest(BaseModel):
     #hyperparameters
     hyperparameters: Optional[Dict[str, Any]] = Field(default={}, description="Hyperparameters for the model")
 
+    # For Auto-Tuning (GridSearchCV)
+    tune_hyperparameters: bool = False
+
 
 class TrainResponse(BaseModel):
     """Response model for training endpoint."""

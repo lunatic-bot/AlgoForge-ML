@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import pandas as pd
 import numpy as np
 from typing import List, Dict, Any
+from sklearn.model_selection import GridSearchCV
 
 
 class BaseMLModel(ABC):
@@ -14,9 +15,18 @@ class BaseMLModel(ABC):
         self.hyperparameters = kwargs
 
     @abstractmethod
-    def train(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
+    def train(self, X_train: pd.DataFrame, y_train: pd.Series, tune: bool=False, param_grid: dict = None) -> None:
         """Fits the model to the training data."""
-        pass
+        if tune and param_grid:
+            # cv = 3 means 3-fold cross-validation. n_jobs = -1, use all the CPU cores
+            search = GridSearchCV(self.model, param_grid, cv=3, n_jobs=-1)
+            search.fit(X_train, y_train)
+
+            # overwrite the model with the best estimator
+            self.model = search.best_estimator_
+        else:
+            self.model.fit(X_train, y_train)
+        
 
     @abstractmethod
     def predict(self, X_test: pd.DataFrame) -> np.ndarray:

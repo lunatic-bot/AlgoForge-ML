@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File
 import uuid
 import os
+import joblib
 import pandas as pd
 from typing import List, Dict, Any 
 
@@ -28,8 +29,12 @@ router = APIRouter()
 UPLOAD_DIR = "data/raw"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# Create the persistent models directory
+MODELS_DIR = "models/saved"
+os.makedirs(MODELS_DIR, exist_ok=True)
+
 # state management
-MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {}
+# MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {}
 
 AVAILABLE_MODELS ={
     # Classification
@@ -148,7 +153,16 @@ def train_model(request: TrainRequest):
     results = model.evaluate(X_test, y_test)
 
     model_id = str(uuid.uuid4())
-    MODEL_REGISTRY[model_id] = {
+    # MODEL_REGISTRY[model_id] = {
+    #     "model": model,
+    #     "loader": loader,
+    #     "requires_scaling": requires_scaling,
+    #     "feature_names": list(X_train.columns),
+    #     "target_mapping": target_mapping,  # Save the translation dictionary
+    #     "task_type": model_config["task_type"]
+    # }
+    # Persistent State Saving (Writing to Disk)
+    saved_state = {
         "model": model,
         "loader": loader,
         "requires_scaling": requires_scaling,
@@ -156,6 +170,11 @@ def train_model(request: TrainRequest):
         "target_mapping": target_mapping,  # Save the translation dictionary
         "task_type": model_config["task_type"]
     }
+
+    # Create the file path and dump the dictionary to the hard drive
+    model_path = os.path.join(MODELS_DIR, f"{model_id}.joblib")
+    joblib.dump(saved_state, model_path)
+
 
     return TrainResponse(
         model_id=model_id,
@@ -170,10 +189,23 @@ def train_model(request: TrainRequest):
 
 @router.post("/predict", response_model=PredictResponse)
 def make_prediction(request: PredictRequest):
-    if request.model_id not in MODEL_REGISTRY:
-        raise HTTPException(status_code=404, detail=f"Model not found: {request.model_id}")
+    """Make a prediction using a persistently saved model."""
+    # if request.model_id not in MODEL_REGISTRY:
+    #     raise HTTPException(status_code=404, detail=f"Model not found: {request.model_id}")
     
-    saved_state = MODEL_REGISTRY[request.model_id]
+    # saved_state = MODEL_REGISTRY[request.model_id]
+
+    #Search the hard drive for the model file
+    model_path = os.path.join(MODELS_DIR, f"{request.model_id}.joblib")
+    if not os.path.exists(model_path):
+        raise HTTPException(status_code=404, detail=f"Model not found: {request.model_id} on server storage.")
+
+    #Load the state back into memory
+    try:
+        saved_state = joblib.load(model_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load model file : {str(e)}")
+    
     model = saved_state["model"]
     loader = saved_state["loader"]
     requires_scaling = saved_state["requires_scaling"]
