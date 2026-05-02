@@ -276,17 +276,32 @@ def make_prediction(request: PredictRequest):
 
     try:
         if backgroud_data is not None:
-            # We have the universal explainer. It figures out the math based on the model type.
-            explainer = shap.Explainer(model.predict, backgroud_data)
+            #passing 'model.model' to give SHAP the raw Scikit-Learn model esitimator
+            raw_estimator = model.model if hasattr(model, "model") else model
+
+            explainer = shap.Explainer(raw_estimator, backgroud_data)
             shap_values = explainer(input_df)
             
-            # map the feature names to their absolute SHAP impact values for this specific prediction
-            impact_scores = abs(shap_values.values[0])
-            explanation_dict = dict(zip(feature_names, impact_scores))
+            # # map the feature names to their absolute SHAP impact values for this specific prediction
+            # impact_scores = abs(shap_values.values[0])
+            # # explanation_dict = dict(zip(feature_names, impact_scores))
+            # # Convert the NumPy array into a native Python list of standard floats!
+
+            #Check how many dimensions SHAP returned
+            if len(shap_values.values.shape) == 3:
+                # It's a 3D array [samples, features, classes]. 
+                # Grab the impacts specifically for the predicted class!
+                impact_scores = abs(shap_values.values[0, :, int(raw_prediction)])
+            else:
+                # It's a 2D array [samples, features] (Regression)
+                impact_scores = abs(shap_values.values[0])
+            
+            # Zip it up and convert to a native Python list
+            explanation_dict = dict(zip(feature_names, impact_scores.tolist()))
 
     except Exception as e:
         print(f"SHAP Error: {str(e)}") #if SHAP can't handle a specific model type yet
-        explaination_dict = None 
+        explanation_dict = None 
 
     return PredictResponse(
         model_id=request.model_id,
