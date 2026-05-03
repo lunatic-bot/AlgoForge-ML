@@ -5,8 +5,23 @@ import requests
 import json
 from components import render_sidebar, render_model_card
 
+import os 
+
+# Try to get API_URL from Streamlit secrets (for cloud), 
+# then from OS environment (for local/docker), 
+# fallback to localhost
+if "API_URL" in st.secrets:
+    API_URL = st.secrets["API_URL"]
+elif os.getenv("API_URL"):
+    API_URL = os.getenv("API_URL")
+else:
+    API_URL = "http://localhost:8000"
+
+# Debugging (Remove this after it works)
+st.sidebar.write(f"Connecting to: {API_URL}")
+
 # API base URL (Removed the trailing /api since our backend routes are at the root)
-API_URL = "http://localhost:8000"
+# API_URL = "http://localhost:8000"
 
 st.set_page_config(
     page_title="AlgoForge-ML",
