@@ -7,9 +7,11 @@ AlgoForge is an end-to-end, API-driven machine learning platform that allows use
 - **Strict Separation of Concerns:** Core ML logic is decoupled from the web layer.
 - **RESTful API Backend:** High-performance, asynchronous endpoints powered by FastAPI.
 - **Interactive Dashboard:** Beautiful, reactive frontend built with Streamlit.
-- **Dynamic Form Generation:** Automatically adapts prediction input fields based on the dataset the model was trained on.
-- **Human-Readable Outputs:** Built-in translation layers to map mathematical predictions (e.g., `0`, `1`) back to human-readable class labels (e.g., `Setosa`, `Malignant`).
-- **State Management:** In-memory registry to handle model persistence, scalers, and label encoders across user sessions.
+- **Custom CSV Processing:** Upload real-world, messy datasets. The backend automatically handles missing value imputation (median) and One-Hot Encoding for text categories.
+- **Explainable AI (XAI):** Integrated SHAP (SHapley Additive exPlanations) visualizes exactly _why_ the model made a specific prediction on the frontend.
+- **Auto-Tuning:** Toggle built-in `GridSearchCV` to automatically find the mathematical optimum hyperparameters for any algorithm.
+- **Model Registry & Persistence:** Models are securely saved to disk using `joblib` alongside lightweight JSON metadata, surviving server restarts and allowing users to browse their training history.
+- **Smart Task Routing:** Automatically detects and formats UI/API responses based on whether the task is Classification (discrete labels) or Regression (continuous floats).
 
 ## 🛠️ Technology Stack
 
@@ -21,77 +23,81 @@ AlgoForge is an end-to-end, API-driven machine learning platform that allows use
 
 **Machine Learning Engine**
 
-- **Scikit-Learn:** Core algorithm implementations (Trees, Linear Models, Distance Models).
+- **Scikit-Learn:** Core algorithm implementations and hyperparameter tuning.
 - **Pandas & NumPy:** Data ingestion, preprocessing, and tensor manipulation.
+- **SHAP:** Explainable AI and feature impact calculations.
+- **Joblib:** High-performance model serialization and disk storage.
 
-**Frontend**
+**Frontend & Testing**
 
 - **Streamlit:** Rapid UI prototyping and interactive data dashboards.
-- **Requests:** HTTP library for API communication.
+- **Pytest & HTTPX:** Comprehensive integration testing for core ML logic and API contracts.
 
 ## 🏗️ Architecture
 
-```
+```text
 AlgoForge-ML/
 ├── core/                   # 🧠 The ML Engine
-│   ├── base_model.py       # Abstract Base Class (BaseMLModel)
+│   ├── base_model.py       # Abstract Base Class (Auto-handles GridSearchCV)
 │   ├── models/             # Concrete model implementations
 │   │   ├── tree_models.py  # RandomForestRunner
-│   │   ├── linear_models.py# LogisticRegressionRunner
+│   │   ├── linear_models.py# LogisticRegressionRunner, SVRRunner
 │   │   └── distance.py     # KNNRunner, SVMRunner
-│   └── data_loader.py      # Data preprocessing & splitting
+│   └── data_loader.py      # Imputation, Encoding, Scaling, & Splitting
 │
 ├── api/                    # ⚙️ The FastAPI Backend
 │   ├── main.py             # FastAPI app with CORS middleware
-│   ├── routes.py           # /train, /predict, /datasets endpoints
-│   └── schemas.py          # Pydantic models for validation
+│   ├── routes.py           # /train, /predict, /upload, /models/history
+│   └── schemas.py          # Strict Pydantic contracts
 │
 ├── frontend/               # 🖥️ The Streamlit UI
 │   ├── app.py              # Main Streamlit entry point
 │   └── components.py       # Reusable UI components
 │
 ├── data/                   # 📊 Local Datasets
-│   ├── raw/                # Unmodified CSVs
+│   ├── raw/                # Uploaded custom CSVs
 │   └── processed/          # Cleaned data ready for training
 │
-└── tests/                  # 🧪 Unit Tests
-    ├── test_models.py      # ML class tests
-    └── test_api.py         # API endpoint tests
+├── models/                 # 💾 Persistent Storage
+│   └── saved/              # .joblib weights and _meta.json history files
+│
+└── tests/                  # 🧪 Test Suite
+    ├── conftest.py         # Pytest anchor
+    ├── test_core.py        # Tests data processing logic
+    └── test_api.py         # Tests endpoint integration
 ```
 
 ## 📦 Current Features
 
-### Supported Models (Classification Only)
+### Supported Models
 
-| Model                        | Type           | Requires Scaling |
-| ---------------------------- | -------------- | ---------------- |
-| Random Forest                | Tree-based     | ❌ No            |
-| Logistic Regression          | Linear         | ✅ Yes           |
-| K-Nearest Neighbors (KNN)    | Distance-based | ✅ Yes           |
-| Support Vector Machine (SVM) | Distance-based | ✅ Yes           |
+| Model                          | Task Type      | Requires Scaling |
+| ------------------------------ | -------------- | ---------------- |
+| Random Forest                  | Classification | ❌ No            |
+| Logistic Regression            | Classification | ✅ Yes           |
+| Support Vector Regressor (SVR) | Regression     | ✅ Yes           |
+| K-Nearest Neighbors (KNN)      | Classification | ✅ Yes           |
+| Support Vector Machine (SVM)   | Classification | ✅ Yes           |
 
 ### Built-in Datasets
 
 - **Iris Dataset** - Multiclass classification (3 flower types)
-- **Breast Cancer Dataset** - Binary classification (malignant/benign)
+- **Breast Cancer Dataset** - Binary classification (Malignant/Benign)
+- **Diabetes Dataset** - Regression (Disease progression)
+- **Custom Uploads** - Any valid CSV file
 
 ### API Endpoints
 
-| Endpoint    | Method | Description                         |
-| ----------- | ------ | ----------------------------------- |
-| `/datasets` | GET    | List available datasets             |
-| `/models`   | GET    | List available model types          |
-| `/train`    | POST   | Train a model on selected dataset   |
-| `/predict`  | POST   | Make predictions with trained model |
+| Endpoint          | Method | Description                                   |
+| ----------------- | ------ | --------------------------------------------- |
+| `/datasets`       | GET    | List built-in datasets                        |
+| `/models`         | GET    | List available model algorithms               |
+| `/models/history` | GET    | Retrieve metadata for all saved models        |
+| `/upload`         | POST   | Upload custom CSV and parse headers           |
+| `/train`          | POST   | Train (or auto-tune) and save to disk         |
+| `/predict`        | POST   | Load model, predict, and generate SHAP values |
 
-### Data Processing
-
-- Automatic train/test splitting
-- One-hot encoding for categorical features
-- Standard scaling for distance/linear models
-- Label encoding for target variables
-
-## 🛠️ Installation
+## 🛠️ Installation & Testing
 
 ```bash
 # Clone the repository
@@ -99,6 +105,9 @@ cd AlgoForge-ML
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Run the Test Suite to verify logic
+python -m pytest -v -s
 
 # Start the API server (Terminal 1)
 uvicorn api.main:app --reload
@@ -114,46 +123,28 @@ Then open:
 
 ## 🔄 Current Workflow
 
-1. **Select a dataset** (Iris or Breast Cancer)
-2. **Choose a model** (Random Forest, Logistic Regression, KNN, or SVM)
-3. **Configure hyperparameters** (optional)
-4. **Train** - The API handles preprocessing automatically
-5. **Evaluate** - Get accuracy scores and detailed reports
-6. **Predict** - Use the trained model for new predictions
+1. **Upload or Select Data:** Use built-in datasets or upload a custom CSV.
+2. **Feature Selection:** Use the dynamic dropdowns to drop noisy columns (e.g., Names, IDs).
+3. **Configure & Tune:** Choose an algorithm and toggle `GridSearchCV` for auto-tuning.
+4. **Train:** The API handles imputation, encoding, and scaling, then saves the `.joblib` to disk.
+5. **View History:** Check the Model Registry to see past model performance metrics.
+6. **Predict & Explain:** Pass JSON features to the model to get predictions alongside a SHAP Feature Importance chart explaining the decision.
 
 ## 📅 Future Plans
 
-### Phase 1: Regression Support
+### Phase 5: Cloud Deployment & Containerization
 
-- [ ] Add `RandomForestRegressor`, `LinearRegressionRunner`, `Ridge`, `Lasso`
-- [ ] Implement regression metrics (MSE, RMSE, R², MAE)
-- [ ] Add housing price dataset for regression testing
-- [ ] Update API to support `task_type` parameter (classification/regression)
+- [ ] Containerize backend and frontend with Docker (`docker-compose.yml`)
+- [ ] Deploy API to cloud platforms (Render, Railway, or AWS ECS)
+- [ ] Set up CI/CD with GitHub Actions for automated `pytest` runs
+- [ ] Add environment variables for production API URL routing
 
-### Phase 2: Cloud Deployment
+### Phase 6: Advanced ML Upgrades
 
-- [ ] Containerize with Docker
-- [ ] Deploy to cloud platforms:
-  - **Render** (free tier friendly)
-  - **Railway**
-  - **AWS ECS / Google Cloud Run**
-- [ ] Set up CI/CD with GitHub Actions
-- [ ] Add environment variables for production settings
-
-### Phase 3: Enhanced Features
-
-- [ ] Add more datasets (Titanic, MNIST, custom CSV upload)
-- [ ] Model persistence (save/load trained models)
-- [ ] Hyperparameter tuning UI
-- [ ] Model comparison dashboard
-- [ ] Export predictions to CSV
-
-### Phase 4: Advanced ML
-
-- [ ] Add XGBoost and LightGBM support
-- [ ] Feature selection techniques
-- [ ] Cross-validation implementation
-- [ ] Learning curves visualization
+- [ ] Add XGBoost and LightGBM model runners
+- [ ] Export predictions to CSV from the frontend
+- [ ] Add learning curves and cross-validation visualization dashboards
+- [ ] Add `RandomForestRegressor` and standard `LinearRegression`
 
 ## 📄 License
 
@@ -161,4 +152,4 @@ MIT License - Feel free to use this project for learning or building your own ML
 
 ---
 
-Built with ❤️ using Python and scikit-learn
+_Built with ❤️ using Python, FastAPI, Streamlit, and Scikit-Learn._
