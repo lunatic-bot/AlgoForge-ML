@@ -8,7 +8,7 @@ def render_sidebar():
     
     page = st.sidebar.radio(
         "Select a module:",
-        ["Train", "Predict", "Datasets"],
+        ["Train", "Predict", "Datasets", "History"],
         label_visibility="collapsed"
     )
     

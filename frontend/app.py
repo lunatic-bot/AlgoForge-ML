@@ -32,6 +32,8 @@ def main():
         render_predict_page()
     elif page == "Datasets":
         render_datasets_page()
+    elif page == "History":
+        render_history_page()
 
 def render_train_page():
     """Render the model training page."""
@@ -255,6 +257,53 @@ def render_datasets_page():
             st.error("Failed to load datasets")
     except Exception as e:
         st.error(f"Failed to connect to API: {str(e)}")
+
+
+def render_history_page():
+    """Render the Model Registry history page."""
+    st.header("📚 Model Registry")
+    st.markdown("View all historically trained models, their configurations, and performance metrics.")
+    try:
+        response = requests.get(f"{API_URL}/models/history")
+        if response.status_code == 200:
+            history = response.json().get("history", [])
+            if not history:
+                st.info("No models have been trained yet.")
+                return
+            # Loop through the history and create a neat expander for each model
+            for idx, model in enumerate(history):
+                # Use a prominent header showing the Algorithm and Dataset
+                title = f"{model.get('algorithm')} ➔ {model.get('dataset')} ({model.get('created_at')})"
+
+                with st.expander(title, expanded=(idx == 0)):
+                    st.code(model.get("model_id"), language="text")
+
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write("**Configuration**")
+                        st.write(f"- **Task:** {model.get('task_type').title()}")
+                        st.write(f"- **Dataset:** {model.get('dataset')}")
+
+                    with col2:
+                        st.write("**Performance Metrics**")
+                        # display the metrics dictionary 
+                        metrics = model.get("metrics", {})
+                        for key, value in metrics.items():
+                            if isinstance(value, float):
+                                st.write(f"- **{key.title()}:** {value:.4f}")
+                            else:
+                                st.write(f"- **{key.title()}:** {value}")
+                        
+                    #add a quick-copy button feature
+                    if st.button("Use this model", key=f"btn_{model.get('model_id')}"):
+                        st.session_state["model_id"] = model.get("model_id")
+                        st.success("Model ID copied to session state! Head over to the Predict tab.")
+
+        else:
+            st.error("Failed to load history from the server.")
+    except Exception as e:
+        st.error(f"Failed to connect to API: {str(e)}")
+
 
 if __name__ == "__main__":
     main()

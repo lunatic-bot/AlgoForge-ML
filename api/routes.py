@@ -2,7 +2,10 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 import uuid
 import os
 import joblib
+import json
+import glob
 import shap
+from datetime import datetime
 import pandas as pd
 from typing import List, Dict, Any 
 
@@ -49,6 +52,29 @@ AVAILABLE_MODELS ={
     "Linear Regression": {"class": LinearRegressionRunner, "requires_scaling": True, "type": "Linear", "task_type": "regression"},
     "SVR (Support Vector Regressor)": {"class": SVRRunner, "requires_scaling": True, "type": "Distance", "task_type": "regression"}
 }
+
+
+@router.get("/models/history")
+def get_model_history():
+    """Returns a list of all historically trained models and their metadata."""
+    history = []
+
+    # find all paths ending with meta.json in models directory
+    search_pattern = os.path.join(MODELS_DIR, "*_meta.json")
+
+    for file_path in glob.glob(search_pattern):
+        try:
+            with open(file_path, "r") as f:
+                meta = json.load(f)
+                history.append(meta)
+        except Exception as e:
+            print(f"Skipping corrupted metadata file {file_path}: {str(e)}")
+
+    # sort the list so that the newest models appear on the top
+    history.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    
+    return {"history": history}
+
 
 #Endpoints
 @router.get("/datasets", response_model=List[DatasetInfo])
@@ -180,6 +206,19 @@ def train_model(request: TrainRequest):
         "task_type": model_config["task_type"],
         "background_data": backgroud_data,
     }
+
+    metadata = {
+        "model_id": model_id,
+        "algorithm": request.model_type,
+        "dataset": request.dataset_name,
+        "task_type": model_config["task_type"],
+        "metrics": results,
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+    meta_path = os.path.join(MODELS_DIR, f"{model_id}_meta.json")
+    with open(meta_path, "w") as f:
+        json.dump(metadata, f)
 
     # Create the file path and dump the dictionary to the hard drive
     model_path = os.path.join(MODELS_DIR, f"{model_id}.joblib")
