@@ -10,12 +10,12 @@ import os
 # Try to get API_URL from Streamlit secrets (for cloud), 
 # then from OS environment (for local/docker), 
 # fallback to localhost
-if "API_URL" in st.secrets:
-    API_URL = st.secrets["API_URL"]
-elif os.getenv("API_URL"):
-    API_URL = os.getenv("API_URL")
-else:
-    API_URL = "http://localhost:8000"
+# if "API_URL" in st.secrets:
+#     API_URL = st.secrets["API_URL"]
+# elif os.getenv("API_URL"):
+#     API_URL = os.getenv("API_URL")
+# else:
+API_URL = "http://localhost:8000"
 
 # Debugging (Remove this after it works)
 st.sidebar.write(f"Connecting to: {API_URL}")
@@ -69,6 +69,7 @@ def render_train_page():
     st.markdown("---")
 
     col1, col2 = st.columns(2)
+    drop_columns = []
     
     with col1:
         model_type = st.selectbox("Select Algorithm", model_options)
