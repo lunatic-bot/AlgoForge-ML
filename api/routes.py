@@ -5,6 +5,8 @@ import joblib
 import json
 import glob
 import shap
+import mlflow
+import mlflow.sklearn
 from datetime import datetime
 import pandas as pd
 from typing import List, Dict, Any 
@@ -123,6 +125,12 @@ def get_models():
 
 @router.post("/train", response_model=TrainResponse)
 def train_model(request: TrainRequest):
+
+    # 1. Setup MLflow
+    mlflow.set_tracking_uri("http://mlflow:5000")
+    mlflow.set_experiment(f"AlgoForge_{request.model_type}")
+
+    
     if request.model_type not in AVAILABLE_MODELS:
         raise HTTPException(status_code=400, detail=f"Invalid model type: {request.model_type}")
     
@@ -174,11 +182,36 @@ def train_model(request: TrainRequest):
         X_train, X_test, y_train, y_test = loader.process_data(df, requires_scaling=requires_scaling)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Data processing failed: {str(e)}")
+    
+    try:
+        # create a new run
+        with mlflow.start_run():
+            # Log Hyperparameters
+            mlflow.log_param("model_type", request.model_type)
+            mlflow.log_param("test_size", request.test_size)
+            mlflow.log_param("dataset", request.dataset_name)
 
-    model = ModelClass(**(request.hyperparameters or {}))
-    model.train(X_train, y_train, tune=request.tune_hyperparameters, 
-        param_grid=model_config.get("param_grid"))
-    results = model.evaluate(X_test, y_test)
+            # Log any specific hyperparameters if they exist
+            if request.hyperparameters:
+                mlflow.log_params(request.hyperparameters)
+
+            model = ModelClass(**(request.hyperparameters or {}))
+            model.train(X_train, y_train, tune=request.tune_hyperparameters, 
+                param_grid=model_config.get("param_grid"))
+            results = model.evaluate(X_test, y_test)
+
+            # 3. Log Metrics (Handles both classification and regression)
+            # MLflow's log_metrics expects a dict of {name: float}
+            # We filter out the 'detailed_report' because it's a nested dict (MLflow doesn't like those in metrics)
+            flat_metrics = {k: v for k, v in results.items() if isinstance(v, (int, float))}
+            mlflow.log_metrics(flat_metrics)
+
+            # 4. Log the Model Artifact (The actual .joblib file)
+            # This allows you to download the model directly from the MLflow UI!
+            mlflow.sklearn.log_model(sk_model=model.model, artifact_path="model")
+
+    except Exception as mlflow_e:
+        print(f"MLflow Logging Failed: {mlflow_e}")
 
     model_id = str(uuid.uuid4())
 
@@ -188,14 +221,7 @@ def train_model(request: TrainRequest):
     backgroud_data = shap.sample(X_train, sample_size)
 
     
-    # MODEL_REGISTRY[model_id] = {
-    #     "model": model,
-    #     "loader": loader,
-    #     "requires_scaling": requires_scaling,
-    #     "feature_names": list(X_train.columns),
-    #     "target_mapping": target_mapping,  # Save the translation dictionary
-    #     "task_type": model_config["task_type"]
-    # }
+
     # Persistent State Saving (Writing to Disk)
     saved_state = {
         "model": model,
@@ -230,7 +256,7 @@ def train_model(request: TrainRequest):
         model_type=request.model_type,
         task_type=model_config["task_type"], # task type
         metrics=results, #dictionary from evaluate()
-        message="Model trained and saved successfully",
+        message="Model trained and saved successfully(Logged to Mlflow).",
         expected_features=list(X_train.columns)
 
     )
