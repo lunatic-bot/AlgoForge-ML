@@ -50,6 +50,50 @@ def main():
     elif page == "History":
         render_history_page()
 
+
+import requests
+import streamlit as st
+
+def login_user(username, password):
+    try:
+        # FastAPI's OAuth2 expects data as form-data, not JSON
+        response = requests.post(
+            f"{API_URL}/login", 
+            data={"username": username, "password": password}
+        )
+        if response.status_code == 200:
+            return response.json() # Returns {"access_token": "...", "token_type": "bearer"}
+        else:
+            st.sidebar.error("Invalid credentials")
+            return None
+    except Exception as e:
+        st.sidebar.error(f"Auth Server Error: {e}")
+        return None
+    
+def render_login_sidebar():
+    st.sidebar.title("🔐 Authentication")
+    
+    # Check if user is already logged in
+    if "access_token" not in st.session_state:
+        with st.sidebar.form("login_form"):
+            user = st.text_input("Username")
+            pw = st.text_input("Password", type="password")
+            submit = st.form_submit_button("Login")
+            
+            if submit:
+                auth_data = login_user(user, pw)
+                if auth_data:
+                    st.session_state["access_token"] = auth_data["access_token"]
+                    st.session_state["username"] = user
+                    st.success("Logged in!")
+                    st.rerun() # Refresh to show protected content
+    else:
+        st.sidebar.write(f"Logged in as: **{st.session_state['username']}**")
+        if st.sidebar.button("Logout"):
+            del st.session_state["access_token"]
+            del st.session_state["username"]
+            st.rerun()
+
 def render_train_page():
     """Render the model training page."""
     st.header("⚙️ Train a Model")
@@ -120,6 +164,25 @@ def render_train_page():
 
     
     if st.button("Train Model", type="primary", disabled=disable_train):
+        
+        if "access_token" not in st.session_state:
+            st.error("Please login via the sidebar to train models.")
+        else:
+            headers = {"Authorization": f"Bearer {st.session_state['access_token']}"}
+            
+            with st.spinner("Training..."):
+                response = requests.post(
+                    f"{API_URL}/train", 
+                    json=payload, 
+                    headers=headers  # <--- CRITICAL ADDITION
+                )
+                
+                if response.status_code == 200:
+                    st.success("Trained successfully!")
+                elif response.status_code == 401:
+                    st.error("Session expired. Please log in again.")
+
+
         with st.spinner(f"Training {model_type} on {dataset_name}..."):
             try:
                 # 2. Match the exact Pydantic TrainRequest schema

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 import uuid
 import os
 import joblib
@@ -19,6 +19,9 @@ from core.data_loader import MLDataLoader
 from core.models.tree_models import RandomForestRunner, RandomForestRegressorRunner
 from core.models.linear_models import LogisticRegressionRunner, LinearRegressionRunner
 from core.models.distance import KNNRunner, SVMRunner, SVRRunner
+
+
+from .auth import get_current_user
 
 # Import schemas
 
@@ -124,7 +127,7 @@ def get_models():
 
 
 @router.post("/train", response_model=TrainResponse)
-def train_model(request: TrainRequest):
+def train_model(request: TrainRequest, current_user: dict = Depends(get_current_user)):
 
     # 1. Setup MLflow
     mlflow.set_tracking_uri("http://mlflow:5000")
