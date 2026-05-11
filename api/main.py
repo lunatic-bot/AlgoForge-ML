@@ -34,13 +34,53 @@ def read_root():
     return {"message": "Welcome to the AlgoForge API Engine. Go to /docs to explore the endpoints."}
 
 #login endpoint (uses JWT)
-@app.post("login")
-def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = FAKE_USERS_DB.get(form_data.username)
-    if not user or not verify_password(form_data.password, user["hashed_password"]):
-        raise HTTPException(status_code=400, detail="Incorrect username or password")
-    
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(data={"sub": user["username"]}, expires_delta=access_token_expires)
+# Login endpoint
+# This endpoint authenticates the user
+# and returns a JWT access token
+@app.post("/login")
 
-    return {"access_token": access_token, "token_type": "bearer"}
+# OAuth2PasswordRequestForm automatically extracts:
+# - username
+# - password
+# from form-data request body
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends()
+):
+
+    # Search for user in fake database
+    user = FAKE_USERS_DB.get(form_data.username)
+
+    # Check:
+    # 1. User exists
+    # 2. Password is correct
+    if not user or not verify_password(
+        form_data.password,
+        user["hashed_password"]
+    ):
+
+        # Raise error if credentials are invalid
+        raise HTTPException(
+            status_code=400,
+            detail="Incorrect username or password"
+        )
+
+    # Define token expiration duration
+    access_token_expires = timedelta(
+        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+
+    # Create JWT access token
+    # "sub" stores username inside token payload
+    access_token = create_access_token(
+        data={"sub": user["username"]},
+        expires_delta=access_token_expires
+    )
+
+    # Return token to client
+    return {
+        "access_token": access_token,
+
+        # Token type used in Authorization header:
+        # Authorization: Bearer <token>
+        "token_type": "bearer"
+    }
