@@ -33,6 +33,7 @@ app.include_router(router)
 def read_root():
     return {"message": "Welcome to the AlgoForge API Engine. Go to /docs to explore the endpoints."}
 
+#login endpoint (uses JWT)
 @app.post("login")
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
     user = FAKE_USERS_DB.get(form_data.username)
