@@ -39,16 +39,39 @@ if "model_id" not in st.session_state:
 
 def main():
     # Render sidebar
-    page = render_sidebar()
+    # page = render_sidebar()
+
+
+    # 1. ALWAYS render the login sidebar first
+    page = render_login_sidebar()
     
-    if page == "Train":
-        render_train_page()
-    elif page == "Predict":
-        render_predict_page()
-    elif page == "Datasets":
-        render_datasets_page()
-    elif page == "History":
-        render_history_page()
+    # 2. Only show the rest of the app if the user is logged in
+    if "access_token" in st.session_state:
+        st.title("🚀 AlgoForge-ML Dashboard")
+        
+        # Your tab/navigation logic here
+        page = st.sidebar.selectbox("Navigate", ["Train", "Predict", "Experiments"])
+        
+        if page == "Train":
+            render_train_page()
+        elif page == "Predict":
+            render_predict_page()
+        elif page == "Datasets":
+            render_datasets_page()
+        elif page == "History":
+            render_history_page()
+    else:
+        st.info("👈 Please enter your credentials in the sidebar to begin.")
+        st.image("https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJueGZ4bmZ4bmZ4/3o7TKMGpxx0R0A1N4k/giphy.gif", caption="Security First!")
+    
+    # if page == "Train":
+    #     render_train_page()
+    # elif page == "Predict":
+    #     render_predict_page()
+    # elif page == "Datasets":
+    #     render_datasets_page()
+    # elif page == "History":
+    #     render_history_page()
 
 
 import requests
