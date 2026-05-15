@@ -66,7 +66,7 @@ def login(
 
     # Define token expiration duration
     access_token_expires = timedelta(
-        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+        minutes=int(ACCESS_TOKEN_EXPIRE_MINUTES)
     )
 
     # Create JWT access token
