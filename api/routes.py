@@ -268,11 +268,6 @@ def train_model(request: TrainRequest, current_user: dict = Depends(get_current_
 @router.post("/predict", response_model=PredictResponse)
 def make_prediction(request: PredictRequest):
     """Make a prediction using a persistently saved model."""
-    # if request.model_id not in MODEL_REGISTRY:
-    #     raise HTTPException(status_code=404, detail=f"Model not found: {request.model_id}")
-    
-    # saved_state = MODEL_REGISTRY[request.model_id]
-
     #Search the hard drive for the model file
     model_path = os.path.join(MODELS_DIR, f"{request.model_id}.joblib")
     if not os.path.exists(model_path):

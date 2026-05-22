@@ -64,14 +64,6 @@ def main():
         st.info("👈 Please enter your credentials in the sidebar to begin.")
         st.image("https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJueGZ4bmZ4bmZ4/3o7TKMGpxx0R0A1N4k/giphy.gif", caption="Security First!")
     
-    # if page == "Train":
-    #     render_train_page()
-    # elif page == "Predict":
-    #     render_predict_page()
-    # elif page == "Datasets":
-    #     render_datasets_page()
-    # elif page == "History":
-    #     render_history_page()
 
 
 import requests
@@ -254,12 +246,6 @@ def render_train_page():
                         col2.metric("Root Mean Squared Error (RMSE)", f"{result['metrics']['rmse']:.2f}")
                         st.info("💡 **R² Score** closer to 1.0 means the model explains the variance well. Lower **RMSE** means the model's predictions are closer to the actual values.")
 
-                        
-                    
-                    # Display the detailed classification report beautifully
-                    # st.subheader("Classification Report")
-                    # report_df = pd.DataFrame(result["report"]).transpose()
-                    # st.dataframe(report_df.style.highlight_max(axis=0), use_container_width=True)
                 else:
                     st.error(f"Error {response.status_code}: {response.text}")
             except Exception as e:
@@ -308,15 +294,11 @@ def render_predict_page():
                 if response.status_code == 200:
                     result = response.json()
                     st.success(result["message"])
-                    # st.metric("Predicted Class", result["prediction"][0])
-                    # Convert it to string and title-case it so "setosa" becomes "Setosa"
-                    # st.metric("Predicted Class", str(result["prediction"]).title())
                     
                     prediction_value = result["prediction"]
                     # If the API returned a float, it's a Regression prediction
                     if isinstance(prediction_value, float):
                         st.metric("Predicted Value (Continuous)", f"{prediction_value:.2f}")
-                        # st.info("💡 Note: For the Diabetes dataset, this number represents disease progression one year after baseline (Scale: 25 - 346).")
                     # Otherwise, it's a Classification label
                     else:
                         st.metric("Predicted Class", str(prediction_value).title())
