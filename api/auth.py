@@ -1,24 +1,17 @@
 # Import date and time utilities
 from datetime import datetime, timedelta
-
-# Optional is used for optional function parameters
 from typing import Optional
-
-# JWTError handles JWT-related exceptions
 # jwt is used to encode and decode JWT tokens
 from jose import JWTError, jwt
-
-# CryptContext is used for password hashing and verification
 from passlib.context import CryptContext
-
-# FastAPI utilities for dependency injection and error handling
 from fastapi import Depends, HTTPException, status
-
-# OAuth2 authentication helpers
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-
-# Used to access environment variables
 import os
+
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from .database import get_db, UserDB
+
 
 # Loads variables from .env file
 from dotenv import load_dotenv
@@ -46,26 +39,10 @@ password_context = CryptContext(
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 
-# ---------------- MOCK DATABASE ---------------- #
-
-# Fake in-memory user database
-# In production, this should be replaced with a real database
-FAKE_USERS_DB = {
-    "admin": {
-        "username": "admin",
-
-        # Store hashed password instead of plain text password
-        # WARNING:
-        # Hashing during startup is not ideal for production
-        # Better approach:
-        # Generate once and store permanently in DB
-        "hashed_password": password_context.hash("algoforge2026"),
-
-        # Whether account is active or disabled
-        "disabled": False,
-    }
-}
-
+# Pydantic schemas for request validation
+class UserCreate(BaseModel):
+    username: str
+    password: str
 
 # ---------------- HELPER FUNCTIONS ---------------- #
 
@@ -119,7 +96,7 @@ def create_access_token(
 # ---------------- AUTHENTICATION ---------------- #
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme)
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ):
     """
     Get currently authenticated user from JWT token.
@@ -161,8 +138,8 @@ async def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    # Fetch user from fake database
-    user = FAKE_USERS_DB.get(username)
+    # Query database instead of dict
+    user = db.query(UserDB).filter(UserDB.username == username).first()
 
     # If user doesn't exist
     if user is None:

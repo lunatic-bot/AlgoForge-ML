@@ -85,29 +85,65 @@ def login_user(username, password):
         st.sidebar.error(f"Auth Server Error: {e}")
         return None
     
-def render_login_sidebar():
-    st.sidebar.title("🔐 Authentication")
+# def render_login_sidebar():
+#     st.sidebar.title("🔐 Authentication")
     
-    # Check if user is already logged in
-    if "access_token" not in st.session_state:
-        with st.sidebar.form("login_form"):
-            user = st.text_input("Username")
-            pw = st.text_input("Password", type="password")
-            submit = st.form_submit_button("Login")
+#     # Check if user is already logged in
+#     if "access_token" not in st.session_state:
+#         with st.sidebar.form("login_form"):
+#             user = st.text_input("Username")
+#             pw = st.text_input("Password", type="password")
+#             submit = st.form_submit_button("Login")
             
-            if submit:
-                auth_data = login_user(user, pw)
-                if auth_data:
-                    st.session_state["access_token"] = auth_data["access_token"]
-                    st.session_state["username"] = user
-                    st.success("Logged in!")
-                    st.rerun() # Refresh to show protected content
-    else:
-        st.sidebar.write(f"Logged in as: **{st.session_state['username']}**")
-        if st.sidebar.button("Logout"):
-            del st.session_state["access_token"]
-            del st.session_state["username"]
-            st.rerun()
+#             if submit:
+#                 auth_data = login_user(user, pw)
+#                 if auth_data:
+#                     st.session_state["access_token"] = auth_data["access_token"]
+#                     st.session_state["username"] = user
+#                     st.success("Logged in!")
+#                     st.rerun() # Refresh to show protected content
+#     else:
+#         st.sidebar.write(f"Logged in as: **{st.session_state['username']}**")
+#         if st.sidebar.button("Logout"):
+#             del st.session_state["access_token"]
+#             del st.session_state["username"]
+#             st.rerun()
+
+def render_login_sidebar():
+    with st.sidebar:
+        st.title("🔐 Authentication")
+        
+        if "access_token" not in st.session_state:
+            # Let the user choose what they want to do
+            auth_mode = st.radio("Choose Action", ["Login", "Sign Up"], horizontal=True)
+            
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            
+            if auth_mode == "Login":
+                if st.button("Login", type="primary"):
+                    data = login_user(username, password)
+                    if data:
+                        st.session_state["access_token"] = data["access_token"]
+                        st.session_state["username"] = username
+                        st.success("Welcome back!")
+                        st.rerun()
+            else:
+                if st.button("Create Account"):
+                    if username and password:
+                        res = requests.post(f"{API_URL}/register", json={"username": username, "password": password})
+                        if res.status_code == 201:
+                            st.success("Account created! You can now switch to Login mode.")
+                        else:
+                            st.error(res.json().get("detail", "Registration failed"))
+                    else:
+                        st.warning("Please fill in all fields")
+        else:
+            st.write(f"Active Session: **{st.session_state['username']}**")
+            if st.button("Logout"):
+                del st.session_state["access_token"]
+                del st.session_state["username"]
+                st.rerun()
 
 def render_train_page():
     """Render the model training page."""
