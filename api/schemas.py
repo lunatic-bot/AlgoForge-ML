@@ -44,6 +44,7 @@ class PredictResponse(BaseModel):
     prediction:Any
     message:str
     explanation: Optional[dict] = None #Feature importance dictionary
+    cache_hit: bool
 
 
 class DatasetInfo(BaseModel):

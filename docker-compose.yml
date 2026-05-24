@@ -1,23 +1,44 @@
 version: '3.8'
+
 services:
   backend:
-    volumes:
-        - ./models/saved:/app/models/saved
-        - ./data/raw:/app/data/raw
-        - ./mlruns:/app/mlruns # Persist MLflow tracking data locally
-
-    mlflow:
-      image: ghcr.io/mlflow/mlflow
-      ports:
-        - "5000:5000"
-      volumes:
-        - ./mlruns:/mlruns
-      command: mlflow server --backend-store-uri /mlruns --default-artifact-root /mlruns --host 0.0.0.0
-
     build:
       context: .
       dockerfile: Dockerfile.api
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       - PORT=8000
+      - ACCESS_TOKEN_EXPIRE_MINUTES=60
+    depends_on:
+      - redis
+      - mlflow
+    volumes:
+      - ./models/saved:/app/models/saved
+      - ./data/raw:/app/data/raw
+      - ./mlruns:/app/mlruns # Persist MLflow tracking data locally
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/mlruns
+    command: >
+      mlflow server 
+      --backend-store-uri /mlruns 
+      --default-artifact-root /mlruns 
+      --host 0.0.0.0 
+      --gunicorn-opts "--trust-proxy-headers --forwarded-allow-ips=*"
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:

@@ -22,6 +22,7 @@ from core.models.distance import KNNRunner, SVMRunner, SVRRunner
 
 
 from .auth import get_current_user
+from .cache import generate_cache_key, get_cached_prediction, set_cached_prediction
 
 # Import schemas
 
@@ -264,16 +265,28 @@ def train_model(request: TrainRequest, current_user: dict = Depends(get_current_
 
     )
 
-
+# Ensure your PredictResponse Pydantic model includes a cache_hit: bool field!
 @router.post("/predict", response_model=PredictResponse)
-def make_prediction(request: PredictRequest):
-    """Make a prediction using a persistently saved model."""
-    #Search the hard drive for the model file
+def make_prediction(request: PredictRequest, current_user: dict = Depends(get_current_user)):
+    """Make a prediction using a persistently saved model, guarded by OAuth2 and optimized with Redis Caching."""
+    
+    # 1. Generate a deterministic cache key based on model and current user input features
+    cache_key = generate_cache_key(request.model_id, request.features)
+    
+    # 2. Check the Redis Cache layer first (Cache-Aside Strategy)
+    cached_result = get_cached_prediction(cache_key)
+    if cached_result:
+        # Senior Flex: inject the hit status telemetry flag
+        cached_result["cache_hit"] = True
+        return cached_result
+
+    # 3. CACHE MISS: Execute standard model logic
+    # Search the hard drive for the model file
     model_path = os.path.join(MODELS_DIR, f"{request.model_id}.joblib")
     if not os.path.exists(model_path):
         raise HTTPException(status_code=404, detail=f"Model not found: {request.model_id} on server storage.")
 
-    #Load the state back into memory
+    # Load the state back into memory
     try:
         saved_state = joblib.load(model_path)
     except Exception as e:
@@ -297,41 +310,25 @@ def make_prediction(request: PredictRequest):
     if requires_scaling:
         # The scaler strips the column names and returns a NumPy array
         scaled_values = loader.scaler.transform(input_df)
-        # FIX: We must wrap that raw array BACK into a Pandas DataFrame 
-        # using the exact column names the model is expecting!
+        # Wrap that raw array BACK into a Pandas DataFrame using exact column names
         input_df = pd.DataFrame(scaled_values, columns=feature_names)
 
-
-    
-    # model.predict returns an array like [0]. Grabing that first item and make it an integer.
+    # Calculate prediction values
     raw_prediction = int(model.predict(input_df)[0]) 
     
     # Grab the translation dictionary saved during training
     target_mapping = saved_state.get("target_mapping")
     task_type = saved_state.get("task_type", "classification") # Fallback to classification
     
-    #Fork logic based on the actual algorithm's task_type
+    # Fork logic based on the actual algorithm's task_type
     if task_type == "classification":
-        # It's Classification
         raw_pred_int = int(raw_prediction)
-        # Translate to text if we have a dictionary, otherwise just return the int (0 or 1)
         if target_mapping is not None:
             final_prediction = target_mapping.get(raw_pred_int, raw_pred_int)
         else:
             final_prediction = raw_pred_int
     else:
-        # It's Regression
         final_prediction = float(raw_prediction)
-
-    # # Fork the logic based on the task type
-    # if target_mapping is not None:
-    #     # It's Classification
-    #     raw_pred_int = int(raw_prediction)
-    #     final_prediction = target_mapping.get(raw_pred_int, raw_pred_int)
-    # else:
-    #     # It's Regression
-    #     final_prediction = float(raw_prediction)
-
 
     # Explain the prediction using SHAP
     backgroud_data = saved_state.get("background_data")
@@ -339,41 +336,35 @@ def make_prediction(request: PredictRequest):
 
     try:
         if backgroud_data is not None:
-            #passing 'model.model' to give SHAP the raw Scikit-Learn model esitimator
             raw_estimator = model.model if hasattr(model, "model") else model
-
             explainer = shap.Explainer(raw_estimator, backgroud_data)
             shap_values = explainer(input_df)
-            
-            # # map the feature names to their absolute SHAP impact values for this specific prediction
-            # impact_scores = abs(shap_values.values[0])
-            # # explanation_dict = dict(zip(feature_names, impact_scores))
-            # # Convert the NumPy array into a native Python list of standard floats!
-
-            #Check how many dimensions SHAP returned
+        
+            # Check how many dimensions SHAP returned
             if len(shap_values.values.shape) == 3:
-                # It's a 3D array [samples, features, classes]. 
-                # Grab the impacts specifically for the predicted class!
+                # [samples, features, classes]
                 impact_scores = abs(shap_values.values[0, :, int(raw_prediction)])
             else:
-                # It's a 2D array [samples, features] (Regression)
+                # [samples, features] (Regression)
                 impact_scores = abs(shap_values.values[0])
             
             # Zip it up and convert to a native Python list
             explanation_dict = dict(zip(feature_names, impact_scores.tolist()))
 
     except Exception as e:
-        print(f"SHAP Error: {str(e)}") #if SHAP can't handle a specific model type yet
+        print(f"SHAP Error: {str(e)}")
         explanation_dict = None 
 
-    return PredictResponse(
-        model_id=request.model_id,
-        prediction=final_prediction,
-        message="Prediction made successfully",
-        explanation=explanation_dict,
-    )
+    # Construct the final prediction dictionary payload
+    response_payload = {
+        "model_id": request.model_id,
+        "prediction": final_prediction,
+        "message": "Prediction made successfully",
+        "explanation": explanation_dict,
+        "cache_hit": False # Explicit status check flag
+    }
 
-    
+    # 4. Write to memory cache so next execution completes in < 2ms
+    set_cached_prediction(cache_key, response_payload, expire_seconds=3600)
 
-
-    
+    return response_payload
