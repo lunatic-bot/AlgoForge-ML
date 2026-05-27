@@ -131,7 +131,8 @@ def get_models():
 def train_model(request: TrainRequest, current_user: dict = Depends(get_current_user)):
 
     # 1. Setup MLflow
-    mlflow.set_tracking_uri("http://mlflow:5000")
+    # mlflow.set_tracking_uri("http://mlflow:5000")
+    mlflow.set_tracking_uri("http://host.docker.internal:5000")
     mlflow.set_experiment(f"AlgoForge_{request.model_type}")
 
     
