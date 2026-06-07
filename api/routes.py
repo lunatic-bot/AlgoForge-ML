@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, status
 # Assuming these schemas and dependencies exist in your setup
 from .schemas import DatasetInfo, ModelInfo, TrainRequest, TrainResponse, PredictRequest, PredictResponse
 from .auth import get_current_user
-from .cache import generate_cache_key, get_cached_prediction, set_cached_prediction
+# from .cache import generate_cache_key, get_cached_prediction, set_cached_prediction
 
 from sklearn.datasets import load_iris, load_breast_cancer, load_diabetes
 
@@ -151,7 +151,8 @@ def train_model(request: TrainRequest, current_user: dict = Depends(get_current_
 
     # 1. Setup MLflow with tracking safeguards
     try:
-        tracking_uri = "http://host.docker.internal:5000"
+        # tracking_uri = "http://host.docker.internal:5000"
+        tracking_uri = "http://localhost:5000"
         mlflow.set_tracking_uri(tracking_uri)
         mlflow.set_experiment(f"AlgoForge_{request.model_type}")
         logger.info(f"Connected to MLflow server at {tracking_uri} | Experiment: AlgoForge_{request.model_type}")
@@ -297,18 +298,18 @@ def make_prediction(request: PredictRequest, current_user: dict = Depends(get_cu
     username = current_user.username if current_user else "unknown"
     logger.info(f"User '{username}' submitted observation payload against model ID: {request.model_id}")
     
-    # 1. Redis Cache Lookup Strategy
-    try:
-        cache_key = generate_cache_key(request.model_id, request.features)
-        cached_result = get_cached_prediction(cache_key)
-        if cached_result:
-            logger.info(f"🚀 Redis Cache Hit intercept! Returning compiled inference state instantly for key: {cache_key}")
-            cached_result["cache_hit"] = True
-            return cached_result
-        logger.info(f"🐢 Redis Cache Miss for key: {cache_key}. Proceeding to disk evaluation path matrix.")
-    except Exception as redis_err:
-        # Fall-through resilience rule: if Redis container goes missing or breaks, catch it silently and evaluate via CPU
-        logger.error(f"Redis memory tracking layer connection error: {str(redis_err)}. Proceeding with raw processing pipeline loop safely.")
+    # # 1. Redis Cache Lookup Strategy
+    # try:
+    #     cache_key = generate_cache_key(request.model_id, request.features)
+    #     cached_result = get_cached_prediction(cache_key)
+    #     if cached_result:
+    #         logger.info(f"🚀 Redis Cache Hit intercept! Returning compiled inference state instantly for key: {cache_key}")
+    #         cached_result["cache_hit"] = True
+    #         return cached_result
+    #     logger.info(f"🐢 Redis Cache Miss for key: {cache_key}. Proceeding to disk evaluation path matrix.")
+    # except Exception as redis_err:
+    #     # Fall-through resilience rule: if Redis container goes missing or breaks, catch it silently and evaluate via CPU
+    #     logger.error(f"Redis memory tracking layer connection error: {str(redis_err)}. Proceeding with raw processing pipeline loop safely.")
 
     # 2. Storage Check and Joblib Deserialization
     model_path = os.path.join(MODELS_DIR, f"{request.model_id}.joblib")
@@ -397,14 +398,14 @@ def make_prediction(request: PredictRequest, current_user: dict = Depends(get_cu
         "prediction": final_prediction,
         "message": "Prediction made successfully",
         "explanation": explanation_dict,
-        "cache_hit": False 
+        # "cache_hit": False 
     }
 
-    try:
-        set_cached_prediction(cache_key, response_payload, expire_seconds=3600)
-        logger.info(f"Inference record saved to Redis cluster for key: {cache_key} with an eviction TTL profile of 1 hour.")
-    except Exception as redis_write_err:
-        logger.error(f"Redis memory caching engine persistence execution error caught: {str(redis_write_err)}")
+    # try:
+    #     set_cached_prediction(cache_key, response_payload, expire_seconds=3600)
+    #     logger.info(f"Inference record saved to Redis cluster for key: {cache_key} with an eviction TTL profile of 1 hour.")
+    # except Exception as redis_write_err:
+    #     logger.error(f"Redis memory caching engine persistence execution error caught: {str(redis_write_err)}")
 
     return response_payload
 

@@ -306,12 +306,12 @@ def render_predict_page():
                     result = response.json()
                     
                     # Log telemetry lookup evaluation analysis output stats to dashboard terminals consoles screens
-                    if result.get("cache_hit"):
-                        logger.info(f"Performance Optimization Analytics Tracker Hit: [CACHE HIT] resolved inference properties details in {latency:.2f}ms")
-                        st.info(f"⚡ **Redis Caching Optimization layer Hit!** Prediction pipeline calculations bypassed completely. Intercepted response record instantly from local volatile RAM memory in {latency:.1f}ms.")
-                    else:
-                        logger.info(f"Performance Optimization Analytics Tracker Miss: [CACHE MISS] executed heavy pipeline execution parameters computing layers in {latency:.2f}ms")
-                        st.warning(f"⚙️ **Redis Caching layer Miss.** Backend loaded model serialization artifacts from structural block volume storage partitions, processed transformations, and computed SHAP attributions calculations arrays in {latency:.1f}ms.")
+                    # if result.get("cache_hit"):
+                    #     logger.info(f"Performance Optimization Analytics Tracker Hit: [CACHE HIT] resolved inference properties details in {latency:.2f}ms")
+                    #     st.info(f"⚡ **Redis Caching Optimization layer Hit!** Prediction pipeline calculations bypassed completely. Intercepted response record instantly from local volatile RAM memory in {latency:.1f}ms.")
+                    # else:
+                    logger.info(f"Performance Optimization Analytics Tracker Miss: [CACHE MISS] executed heavy pipeline execution parameters computing layers in {latency:.2f}ms")
+                    st.warning(f"⚙️ **Redis Caching layer Miss.** Backend loaded model serialization artifacts from structural block volume storage partitions, processed transformations, and computed SHAP attributions calculations arrays in {latency:.1f}ms.")
                                     
                     prediction_value = result["prediction"]
                     if isinstance(prediction_value, float):
