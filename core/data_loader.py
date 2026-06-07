@@ -3,8 +3,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from typing import Tuple
 from sklearn.impute import SimpleImputer
+
 # Import your centralized logger utility
-from .logger import setup_logger
+from api.logger import setup_logger
 
 # Initialize a dedicated logger for data lifecycle and engineering routines
 logger = setup_logger("api.dataloader")

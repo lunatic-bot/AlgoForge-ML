@@ -6,7 +6,7 @@ import sys
 ## define log level
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
-def setup_logger(name: str) -> logging.Logger:
+def setup_logger(name: str, mirror_to_console: bool = False) -> logging.Logger:
     """congifures and returns a standerdized logging instance."""
     logger = logging.getLogger(name)
 
@@ -24,13 +24,19 @@ def setup_logger(name: str) -> logging.Logger:
     logger.addHandler(console_handler)
 
     #Filehandler saves logs to the disk inside the container
-    log_dir = "/logs"
+    log_dir = "AlgoForge-ML/logs"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir, exist_ok=True)
 
-    file_handler = logging.FileHandler(os.path.join(log_dir, f"{name}.log"))
+    file_handler = logging.FileHandler(os.path.join(log_dir, "backend.log"), encoding="utf-8")
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
+
+    ## console mirror
+    if mirror_to_console:
+        console_handler = logging.StreamHandler(stream=sys.stdout)
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
 
     return logger
 

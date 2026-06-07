@@ -146,7 +146,7 @@ def get_models():
 @router.post("/train", response_model=TrainResponse)
 def train_model(request: TrainRequest, current_user: dict = Depends(get_current_user)):
     """Trains an ML Model, tracks metrics via MLflow, and logs pipeline state."""
-    username = current_user.get("username", "unknown")
+    username = current_user.username if current_user else "unknown"
     logger.info(f"User '{username}' initiated train run. Algorithm: {request.model_type} | Dataset: {request.dataset_name}")
 
     # 1. Setup MLflow with tracking safeguards
@@ -294,7 +294,7 @@ def train_model(request: TrainRequest, current_user: dict = Depends(get_current_
 @router.post("/predict", response_model=PredictResponse)
 def make_prediction(request: PredictRequest, current_user: dict = Depends(get_current_user)):
     """Make a prediction using a persistently saved model, guarded by OAuth2 and optimized with Redis Caching."""
-    username = current_user.get("username", "unknown")
+    username = current_user.username if current_user else "unknown"
     logger.info(f"User '{username}' submitted observation payload against model ID: {request.model_id}")
     
     # 1. Redis Cache Lookup Strategy

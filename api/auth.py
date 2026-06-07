@@ -18,6 +18,11 @@ from .logger import setup_logger
 # Initialize a dedicated logger for security and authentication routines
 logger = setup_logger("api.auth")
 
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 # Read secret values from environment variables
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")  # Safe fallback if env drops it
