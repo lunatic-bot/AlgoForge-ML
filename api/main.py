@@ -7,6 +7,10 @@ from .auth import UserCreate, create_access_token, verify_password, ACCESS_TOKEN
 from sqlalchemy.orm import Session
 from .database import engine, Base, UserDB, get_db
 
+from .logger import setup_logger
+
+logger = setup_logger("api.main")
+
 # Initialize the main FastAPI application
 app = FastAPI(
     title="AlgoForge API", 
