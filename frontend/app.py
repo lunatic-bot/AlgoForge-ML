@@ -296,10 +296,13 @@ def render_predict_page():
             try:
                 feature_dict = json.loads(features_input)
                 payload = {"model_id": model_id, "features": feature_dict}
+
+                # Grab the token from Streamlit memory
+                headers = {"Authorization": f"Bearer {st.session_state['access_token']}"}
                 
                 # Check performance timestamps metrics logs counters triggers points
                 start_time = datetime.now()
-                response = requests.post(f"{API_URL}/predict", json=payload, timeout=15)
+                response = requests.post(f"{API_URL}/predict", json=payload, headers=headers, timeout=45)
                 latency = (datetime.now() - start_time).total_seconds() * 1000
 
                 if response.status_code == 200:

@@ -153,8 +153,8 @@ def train_model(request: TrainRequest, current_user: dict = Depends(get_current_
     try:
         # tracking_uri = "http://host.docker.internal:5000"
         tracking_uri = "http://localhost:5000"
-        mlflow.set_tracking_uri(tracking_uri)
-        mlflow.set_experiment(f"AlgoForge_{request.model_type}")
+        # mlflow.set_tracking_uri(tracking_uri)
+        # mlflow.set_experiment(f"AlgoForge_{request.model_type}")
         logger.info(f"Connected to MLflow server at {tracking_uri} | Experiment: AlgoForge_{request.model_type}")
     except Exception as mlflow_connect_err:
         logger.error(f"MLflow connection handshake failed: {str(mlflow_connect_err)}", exc_info=True)
@@ -294,34 +294,21 @@ def train_model(request: TrainRequest, current_user: dict = Depends(get_current_
 
 @router.post("/predict", response_model=PredictResponse)
 def make_prediction(request: PredictRequest, current_user: dict = Depends(get_current_user)):
-    """Make a prediction using a persistently saved model, guarded by OAuth2 and optimized with Redis Caching."""
-    username = current_user.username if current_user else "unknown"
+    """Make a prediction using a persistently saved model, guarded by OAuth2."""
+    username = getattr(current_user, "username", "unknown")
     logger.info(f"User '{username}' submitted observation payload against model ID: {request.model_id}")
     
-    # # 1. Redis Cache Lookup Strategy
-    # try:
-    #     cache_key = generate_cache_key(request.model_id, request.features)
-    #     cached_result = get_cached_prediction(cache_key)
-    #     if cached_result:
-    #         logger.info(f"🚀 Redis Cache Hit intercept! Returning compiled inference state instantly for key: {cache_key}")
-    #         cached_result["cache_hit"] = True
-    #         return cached_result
-    #     logger.info(f"🐢 Redis Cache Miss for key: {cache_key}. Proceeding to disk evaluation path matrix.")
-    # except Exception as redis_err:
-    #     # Fall-through resilience rule: if Redis container goes missing or breaks, catch it silently and evaluate via CPU
-    #     logger.error(f"Redis memory tracking layer connection error: {str(redis_err)}. Proceeding with raw processing pipeline loop safely.")
-
-    # 2. Storage Check and Joblib Deserialization
+    # 1. Storage Check and Joblib Deserialization (Direct to Disk)
     model_path = os.path.join(MODELS_DIR, f"{request.model_id}.joblib")
     if not os.path.exists(model_path):
-        logger.warning(f"Inference prediction aborted. Model identifier path asset target not found: {model_path}")
+        logger.warning(f"Inference prediction aborted. Target not found: {model_path}")
         raise HTTPException(status_code=404, detail=f"Model not found: {request.model_id} on server storage.")
 
     try:
         saved_state = joblib.load(model_path)
-        logger.debug(f"Successfully loaded joblib model state wrapper into engine RAM memory space.")
+        logger.debug(f"Successfully loaded joblib model state wrapper into engine RAM.")
     except Exception as e:
-        logger.critical(f"Binary object graph construction failure during model package instantiation: {str(e)}", exc_info=True)
+        logger.critical(f"Object graph construction failure during instantiation: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to load model file : {str(e)}")
     
     model = saved_state["model"]
@@ -329,28 +316,25 @@ def make_prediction(request: PredictRequest, current_user: dict = Depends(get_cu
     requires_scaling = saved_state["requires_scaling"]
     feature_names = saved_state["feature_names"]
 
-    # 3. Data Transformation and Processing Pipeline
+    # 2. Data Transformation Pipeline
     try:
-        input_df = pd.DataFrame([request.features])
-        input_df = input_df.astype(float) 
+        input_df = pd.DataFrame([request.features]).astype(float) 
         input_df = input_df[feature_names]
     except KeyError as missing_feat_err:
-        logger.warning(f"Bad Request: Input features array missing required model signature elements. Details: {str(missing_feat_err)}")
-        raise HTTPException(status_code=400, detail="Provided features matrix configuration doesn't match baseline model layout parameters.")
+        logger.warning(f"Input features missing required elements: {str(missing_feat_err)}")
+        raise HTTPException(status_code=400, detail="Features matrix doesn't match baseline model layout.")
     except ValueError as val_cast_err:
-        logger.warning(f"Bad Request: Input properties translation failed typing schema casts. Details: {str(val_cast_err)}")
-        raise HTTPException(status_code=400, detail="Feature properties casting exception: Ensure values can translate to real floats.")
+        raise HTTPException(status_code=400, detail="Feature properties casting exception: Ensure values are numeric.")
 
     if requires_scaling:
         try:
-            logger.debug("Applying normalization transformation transformations onto feature row matrix vectors.")
             scaled_values = loader.scaler.transform(input_df)
             input_df = pd.DataFrame(scaled_values, columns=feature_names)
         except Exception as scale_err:
-            logger.error(f"Scaler calculation transformer step failed processing input inputs: {str(scale_err)}", exc_info=True)
-            raise HTTPException(status_code=500, detail="Internal inference calculation processing transformation engine crash.")
+            logger.error(f"Scaler transformation crashed: {str(scale_err)}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Internal inference transformation crash.")
 
-    # 4. Core Prediction Calculations
+    # 3. Core Prediction Calculations
     try:
         raw_prediction = int(model.predict(input_df)[0]) 
         target_mapping = saved_state.get("target_mapping")
@@ -358,24 +342,20 @@ def make_prediction(request: PredictRequest, current_user: dict = Depends(get_cu
         
         if task_type == "classification":
             raw_pred_int = int(raw_prediction)
-            if target_mapping is not None:
-                final_prediction = target_mapping.get(raw_pred_int, raw_pred_int)
-            else:
-                final_prediction = raw_pred_int
+            final_prediction = target_mapping.get(raw_pred_int, raw_pred_int) if target_mapping else raw_pred_int
         else:
             final_prediction = float(raw_prediction)
-        logger.info(f"Prediction execution calculation successful. Raw inference index: {raw_prediction} | Transformed score output value: {final_prediction}")
+        logger.info(f"Prediction successful. Output value: {final_prediction}")
     except Exception as infer_err:
-        logger.critical(f"Mathematical execution fault inside model prediction block function layer: {str(infer_err)}", exc_info=True)
+        logger.critical(f"Mathematical execution fault inside model block: {str(infer_err)}", exc_info=True)
         raise HTTPException(status_code=500, detail="ML Model execution calculations processing failure.")
 
-    # 5. SHAP Explainability Engine Generation Block
+    # 4. SHAP Explainability Engine
     backgroud_data = saved_state.get("background_data")
     explanation_dict = None
 
     try:
         if backgroud_data is not None:
-            logger.debug("Generating prediction local attribution explainability impacts array matrix utilizing SHAP kernel explainer objects.")
             raw_estimator = model.model if hasattr(model, "model") else model
             explainer = shap.Explainer(raw_estimator, backgroud_data)
             shap_values = explainer(input_df)
@@ -386,28 +366,136 @@ def make_prediction(request: PredictRequest, current_user: dict = Depends(get_cu
                 impact_scores = abs(shap_values.values[0])
             
             explanation_dict = dict(zip(feature_names, impact_scores.tolist()))
-            logger.debug("SHAP explanation vectors compiled successfully.")
     except Exception as shap_crash_err:
-        # Non-blocking explainability error capture
-        logger.error(f"Attribution analysis handling collapsed during calculation: {str(shap_crash_err)}", exc_info=True)
-        explanation_dict = None 
+        logger.error(f"Attribution analysis collapsed: {str(shap_crash_err)}", exc_info=True)
 
-    # 6. Response Construction and Cache Populating Execution
-    response_payload = {
+    # 5. Response Construction
+    return {
         "model_id": request.model_id,
         "prediction": final_prediction,
         "message": "Prediction made successfully",
         "explanation": explanation_dict,
-        # "cache_hit": False 
+        "cache_hit": False # Hardcoded to satisfy your Pydantic schema without Redis
     }
 
-    # try:
-    #     set_cached_prediction(cache_key, response_payload, expire_seconds=3600)
-    #     logger.info(f"Inference record saved to Redis cluster for key: {cache_key} with an eviction TTL profile of 1 hour.")
-    # except Exception as redis_write_err:
-    #     logger.error(f"Redis memory caching engine persistence execution error caught: {str(redis_write_err)}")
 
-    return response_payload
+
+# @router.post("/predict", response_model=PredictResponse)
+# def make_prediction(request: PredictRequest, current_user: dict = Depends(get_current_user)):
+#     """Make a prediction using a persistently saved model, guarded by OAuth2 and optimized with Redis Caching."""
+#     username = current_user.username if current_user else "unknown"
+#     logger.info(f"User '{username}' submitted observation payload against model ID: {request.model_id}")
+    
+#     # # 1. Redis Cache Lookup Strategy
+#     # try:
+#     #     cache_key = generate_cache_key(request.model_id, request.features)
+#     #     cached_result = get_cached_prediction(cache_key)
+#     #     if cached_result:
+#     #         logger.info(f"🚀 Redis Cache Hit intercept! Returning compiled inference state instantly for key: {cache_key}")
+#     #         cached_result["cache_hit"] = True
+#     #         return cached_result
+#     #     logger.info(f"🐢 Redis Cache Miss for key: {cache_key}. Proceeding to disk evaluation path matrix.")
+#     # except Exception as redis_err:
+#     #     # Fall-through resilience rule: if Redis container goes missing or breaks, catch it silently and evaluate via CPU
+#     #     logger.error(f"Redis memory tracking layer connection error: {str(redis_err)}. Proceeding with raw processing pipeline loop safely.")
+
+#     # 2. Storage Check and Joblib Deserialization
+#     model_path = os.path.join(MODELS_DIR, f"{request.model_id}.joblib")
+#     if not os.path.exists(model_path):
+#         logger.warning(f"Inference prediction aborted. Model identifier path asset target not found: {model_path}")
+#         raise HTTPException(status_code=404, detail=f"Model not found: {request.model_id} on server storage.")
+
+#     try:
+#         saved_state = joblib.load(model_path)
+#         logger.debug(f"Successfully loaded joblib model state wrapper into engine RAM memory space.")
+#     except Exception as e:
+#         logger.critical(f"Binary object graph construction failure during model package instantiation: {str(e)}", exc_info=True)
+#         raise HTTPException(status_code=500, detail=f"Failed to load model file : {str(e)}")
+    
+#     model = saved_state["model"]
+#     loader = saved_state["loader"]
+#     requires_scaling = saved_state["requires_scaling"]
+#     feature_names = saved_state["feature_names"]
+
+#     # 3. Data Transformation and Processing Pipeline
+#     try:
+#         input_df = pd.DataFrame([request.features])
+#         input_df = input_df.astype(float) 
+#         input_df = input_df[feature_names]
+#     except KeyError as missing_feat_err:
+#         logger.warning(f"Bad Request: Input features array missing required model signature elements. Details: {str(missing_feat_err)}")
+#         raise HTTPException(status_code=400, detail="Provided features matrix configuration doesn't match baseline model layout parameters.")
+#     except ValueError as val_cast_err:
+#         logger.warning(f"Bad Request: Input properties translation failed typing schema casts. Details: {str(val_cast_err)}")
+#         raise HTTPException(status_code=400, detail="Feature properties casting exception: Ensure values can translate to real floats.")
+
+#     if requires_scaling:
+#         try:
+#             logger.debug("Applying normalization transformation transformations onto feature row matrix vectors.")
+#             scaled_values = loader.scaler.transform(input_df)
+#             input_df = pd.DataFrame(scaled_values, columns=feature_names)
+#         except Exception as scale_err:
+#             logger.error(f"Scaler calculation transformer step failed processing input inputs: {str(scale_err)}", exc_info=True)
+#             raise HTTPException(status_code=500, detail="Internal inference calculation processing transformation engine crash.")
+
+#     # 4. Core Prediction Calculations
+#     try:
+#         raw_prediction = int(model.predict(input_df)[0]) 
+#         target_mapping = saved_state.get("target_mapping")
+#         task_type = saved_state.get("task_type", "classification")
+        
+#         if task_type == "classification":
+#             raw_pred_int = int(raw_prediction)
+#             if target_mapping is not None:
+#                 final_prediction = target_mapping.get(raw_pred_int, raw_pred_int)
+#             else:
+#                 final_prediction = raw_pred_int
+#         else:
+#             final_prediction = float(raw_prediction)
+#         logger.info(f"Prediction execution calculation successful. Raw inference index: {raw_prediction} | Transformed score output value: {final_prediction}")
+#     except Exception as infer_err:
+#         logger.critical(f"Mathematical execution fault inside model prediction block function layer: {str(infer_err)}", exc_info=True)
+#         raise HTTPException(status_code=500, detail="ML Model execution calculations processing failure.")
+
+#     # 5. SHAP Explainability Engine Generation Block
+#     backgroud_data = saved_state.get("background_data")
+#     explanation_dict = None
+
+#     try:
+#         if backgroud_data is not None:
+#             logger.debug("Generating prediction local attribution explainability impacts array matrix utilizing SHAP kernel explainer objects.")
+#             raw_estimator = model.model if hasattr(model, "model") else model
+#             explainer = shap.Explainer(raw_estimator, backgroud_data)
+#             shap_values = explainer(input_df)
+        
+#             if len(shap_values.values.shape) == 3:
+#                 impact_scores = abs(shap_values.values[0, :, int(raw_prediction)])
+#             else:
+#                 impact_scores = abs(shap_values.values[0])
+            
+#             explanation_dict = dict(zip(feature_names, impact_scores.tolist()))
+#             logger.debug("SHAP explanation vectors compiled successfully.")
+#     except Exception as shap_crash_err:
+#         # Non-blocking explainability error capture
+#         logger.error(f"Attribution analysis handling collapsed during calculation: {str(shap_crash_err)}", exc_info=True)
+#         explanation_dict = None 
+
+#     # 6. Response Construction and Cache Populating Execution
+#     response_payload = {
+#         "model_id": request.model_id,
+#         "prediction": final_prediction,
+#         "message": "Prediction made successfully",
+#         "explanation": explanation_dict,
+#         # "cache_hit": False 
+#     }
+
+#     # try:
+#     #     set_cached_prediction(cache_key, response_payload, expire_seconds=3600)
+#     #     logger.info(f"Inference record saved to Redis cluster for key: {cache_key} with an eviction TTL profile of 1 hour.")
+#     # except Exception as redis_write_err:
+#     #     logger.error(f"Redis memory caching engine persistence execution error caught: {str(redis_write_err)}")
+
+#     return response_payload
 
 
 
