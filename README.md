@@ -135,7 +135,7 @@ Then open:
 ### Phase 5: Cloud Deployment & Containerization
 
 - [ ] Containerize backend and frontend with Docker (`docker-compose.yml`)
-- [ ] Deploy API to cloud platforms (Render, Railway, or AWS ECS)
+- [ ] Deploy API to cloud platforms (Azure, Railway, or AWS ECS)
 - [ ] Set up CI/CD with GitHub Actions for automated `pytest` runs
 - [ ] Add environment variables for production API URL routing
 
